@@ -124,13 +124,29 @@ def test_permanent_facade_aliases_are_the_canonical_objects():
     assert strip_conversation_chrome is text.strip_conversation_chrome
 
 
+# Own-profile editing is served by `ProfileEditor` through
+# `get_ready_profile_editor`, not by the extractor facade: it is a separate
+# workflow with its own approval and verification model. Named here so a new
+# tool still cannot bypass the facade without appearing in one of the two sets.
+PROFILE_EDIT_TOOLS = {
+    "get_my_editable_profile",
+    "get_my_experience",
+    "get_my_skills",
+    "propose_profile_changes",
+    "preview_profile_changes",
+    "apply_profile_changes",
+    "discard_profile_changes",
+}
+
+
 async def test_registered_tools_match_extractor_delegates():
     tools = await create_mcp_server().list_tools()
     tool_names = {tool.name for tool in tools}
 
     # The two session tools read no LinkedIn page, so neither has a delegate.
     session_tools = {"close_session", "get_session_status"}
-    assert tool_names == {*TOOL_DELEGATES, *session_tools}
+    assert tool_names == {*TOOL_DELEGATES, *session_tools, *PROFILE_EDIT_TOOLS}
+    assert not PROFILE_EDIT_TOOLS & set(TOOL_DELEGATES)
     assert set(TOOL_DELEGATES.values()) == TOOL_FACADE_METHODS
     assert not session_tools & set(TOOL_DELEGATES)
 

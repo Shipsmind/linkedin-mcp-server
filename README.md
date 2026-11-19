@@ -83,13 +83,13 @@ Use code <strong>FOUNDING20</strong> for 20% off your first year. <a href="https
 
 | Tool | Description |
 |------|-------------|
-| `get_person_profile` | Read profile sections: experience, education, skills, projects, volunteering, posts. |
+| `get_person_profile` | Read profile sections: experience, education, skills, projects, volunteering, posts |
 | `get_my_profile` | Read your own profile, with the same section selection as other profiles. |
 | `connect_with_person` | Send a connection request with an optional note, or accept an incoming one. |
 | `get_sidebar_profiles` | Find recommended profile links, including people you may know. |
 | `get_inbox` | List recent inbox conversations, with links to open individual threads. |
 | `get_conversation` | Read a conversation's messages using a LinkedIn username or thread ID. |
-| `search_conversations` | Search messages by keyword and return links to matching conversation threads. |
+| `search_conversations` | Search messages by keyword and return links to matching conversation threads |
 | `archive_conversation` | Archive a conversation by thread ID; a repeat call reports it already archived. |
 | `send_message` | Message a profile after confirmation. Threads use `reply_to_conversation`. |
 | `reply_to_conversation` | Reply inside an existing thread or InMail by thread ID. Sends after confirmation. |
@@ -106,6 +106,13 @@ Use code <strong>FOUNDING20</strong> for 20% off your first year. <a href="https
 | `get_easy_apply_form` | Read an Easy Apply form's fields, options and prefilled values. Never submits. |
 | `get_feed` | Read recent posts from your home feed, with links to the original posts. |
 | `search_posts` | Search posts by keyword, optionally filtered by recency or content type. |
+| `get_my_editable_profile` | Read your headline, about, experiences and skills as fields you can edit. |
+| `get_my_experience` | Read your own experience entries, with stable ids for editing. |
+| `get_my_skills` | Read your own skills, with stable ids for editing. |
+| `propose_profile_changes` | Create a previewable change set for your own profile. Changes nothing yet. |
+| `preview_profile_changes` | Show before and after values, and edits made since the proposal. |
+| `apply_profile_changes` | Apply an approved change set and verify it. See [profile editing](#editing-your-own-profile). |
+| `discard_profile_changes` | Discard a pending profile change set without applying it. |
 | `get_session_status` | Check your saved login and browser state without opening a browser. |
 | `close_session` | Close the shared browser session without deleting your saved login. |
 
@@ -763,6 +770,36 @@ With a paid provider, use a sticky residential session that holds one address (n
 
 <br/>
 <br/>
+
+## Editing your own profile
+
+Ask your AI assistant to review your profile, see an exact diff of what it
+suggests, approve it, and have each change made **and checked** on LinkedIn,
+with no password handed over and nothing changed without your say-so.
+
+```
+get_my_editable_profile → propose_profile_changes → preview_profile_changes
+        → you approve → apply_profile_changes(confirm=true) → every field re-read and verified
+```
+
+- **Edits:** headline, About, title and description of an existing position,
+  adding and removing skills.
+- **Two switches:** the server needs `MCP_LINKEDIN_WRITE_ENABLED=true` *and*
+  each apply needs `confirm: true`. Writes are off by default.
+- **Never overwrites your own edits:** if the profile changed after the
+  proposal, the apply returns `STALE_CHANGE_SET` and writes nothing.
+- **Never guesses or truncates:** ambiguous positions, over-long text and
+  inexact skill names are refused with the reason.
+- **Leaves a trail:** change sets, a snapshot of every replaced value and an
+  audit log, all local and free of cookies or tokens.
+
+> [!WARNING]
+> LinkedIn's terms don't permit automated access, even to your own account.
+> Keep edits occasional and human-directed.
+
+**Full guide:** [docs/profile-editing.md](docs/profile-editing.md): setup,
+tools, examples, every result code, local records, a safe first run, and how
+to update the locators when LinkedIn changes its pages.
 
 ## Setup from Source (Develop & Contribute)
 
