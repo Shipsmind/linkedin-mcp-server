@@ -14,7 +14,7 @@ from patchright.async_api import (
 
 from .auth import raise_if_auth_route
 from .destination import linkedin_element
-from .exceptions import OffLinkedInLandingError, RateLimitError
+from .exceptions import OffLinkedInLandingError, RateLimitError, SecurityCheckError
 
 logger = logging.getLogger(__name__)
 
@@ -334,15 +334,14 @@ async def scroll_to_bottom(
         pause_time: Time to pause between scrolls (seconds)
         max_scrolls: Maximum number of scroll attempts
     """
-    for i in range(max_scrolls):
-        previous_height = await page.evaluate("document.body.scrollHeight")
-        await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-        await asyncio.sleep(pause_time)
+    # Shipsmind fork: mouse-wheel bursts with random reading pauses instead of
+    # jumping to the bottom (``pause_time`` is no longer used: every pause is
+    # a fresh random draw). Imported here: the linkedin package imports this
+    # module, so a top-level import would be circular.
+    del pause_time
+    from .human_input import wheel_scroll
 
-        new_height = await page.evaluate("document.body.scrollHeight")
-        if new_height == previous_height:
-            logger.debug("Reached bottom after %d scrolls", i + 1)
-            break
+    await wheel_scroll(page, to_bottom=True, max_bursts=max(3, max_scrolls * 3))
 
 
 async def scroll_job_sidebar(
@@ -546,14 +545,21 @@ async def handle_modal_close(page: Page) -> bool:
         ).first
 
         if await close_button.is_visible(timeout=1000):
+            from .human_input import (
+                action_pause,
+                move_and_click,
+            )
+
+            # move_and_click refuses (SecurityCheckError) when a check is
+            # showing, so a challenge dialog is never dismissed.
             async with linkedin_element(close_button, timeout=1000) as button:
-                await button.click()
-            await asyncio.sleep(0.5)
+                await move_and_click(page, button)
+            await action_pause()
             logger.debug("Closed modal")
             return True
     except PlaywrightTimeoutError:
         pass
-    except OffLinkedInLandingError:
+    except (OffLinkedInLandingError, SecurityCheckError, RateLimitError):
         raise
     except Exception as e:
         logger.debug("Error closing modal: %s", e)

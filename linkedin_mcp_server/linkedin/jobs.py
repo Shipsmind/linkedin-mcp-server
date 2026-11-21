@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-import asyncio
+import asyncio  # noqa: F401 - tests patch <module>.asyncio.sleep
 import logging
 import time
 
@@ -51,7 +51,8 @@ from linkedin_mcp_server.linkedin.job_policy import (
 from linkedin_mcp_server.linkedin.link_metadata import Reference, dedupe_references
 from linkedin_mcp_server.linkedin.navigation import PageNavigator
 from linkedin_mcp_server.linkedin.search_urls import build_job_search_url
-from linkedin_mcp_server.linkedin.session import NAV_DELAY
+from linkedin_mcp_server.core import human_input
+
 from linkedin_mcp_server.linkedin.text import (
     JOB_APPLY_EN_US,
     JOB_POSTING_EN_US,
@@ -61,6 +62,10 @@ from linkedin_mcp_server.linkedin.text import (
 )
 
 logger = logging.getLogger(__name__)
+
+# The longest pause a person takes before the next page: only used to
+# predict whether another page fits the time budget, never as a delay.
+NAV_DELAY = human_input.PAGE_LOAD_PAUSE_MAX
 
 
 def _on_tracker_tab(url: str, stage: JobsTrackerStage) -> bool:
@@ -347,7 +352,7 @@ class JobReader:
                 break
 
             if page_num > 0:
-                await asyncio.sleep(NAV_DELAY)
+                await human_input.page_load_pause()
 
             # Started after the delay, because the prediction above adds
             # `NAV_DELAY` to `slowest_page` itself. Timing from before the
@@ -710,7 +715,7 @@ class JobReader:
                 break
 
             if page_num > 0:
-                await asyncio.sleep(NAV_DELAY)
+                await human_input.page_load_pause()
 
             url = (
                 base_url
@@ -893,7 +898,7 @@ class JobReader:
         card_title, company = await self._pages.read_posting_title(job_id)
         keywords = f"{card_title} {company}"
         url = f"{build_job_search_url(keywords)}&geoId={WORLDWIDE_GEO_ID}"
-        await asyncio.sleep(NAV_DELAY)
+        await human_input.page_load_pause()
         outcome, cards = await self._pages.dismiss_search_card(url, job_id)
         if outcome == "absent":
             raise LinkedInOperationError(
@@ -912,7 +917,7 @@ class JobReader:
                 "did not change."
             )
         if outcome == "dismissed":
-            await asyncio.sleep(NAV_DELAY)
+            await human_input.page_load_pause()
             if await self._pages.search_lists_job(url, job_id, cards - 1):
                 raise LinkedInOperationError(
                     f"Job {job_id} was dismissed, but it was back in the search "

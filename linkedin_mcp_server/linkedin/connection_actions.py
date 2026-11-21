@@ -27,7 +27,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 from urllib.parse import quote_plus
 
-import asyncio
+import asyncio  # noqa: F401 - tests patch <module>.asyncio.sleep
 import logging
 
 from patchright.async_api import TimeoutError as PlaywrightTimeoutError
@@ -37,7 +37,11 @@ from linkedin_mcp_server.core.destination import (
     linkedin_handle,
     raise_if_off_linkedin,
 )
-from linkedin_mcp_server.core.exceptions import OffLinkedInLandingError
+from linkedin_mcp_server.core.exceptions import (
+    OffLinkedInLandingError,
+    RateLimitError,
+    SecurityCheckError,
+)
 import linkedin_mcp_server.linkedin.connection as connection
 from linkedin_mcp_server.linkedin.connection import ActionSignals
 from linkedin_mcp_server.linkedin.identifiers import (
@@ -45,6 +49,7 @@ from linkedin_mcp_server.linkedin.identifiers import (
     person_profile_url,
 )
 from linkedin_mcp_server.linkedin.navigation import PageNavigator
+from linkedin_mcp_server.core import human_input
 from linkedin_mcp_server.linkedin.session import PageSession
 
 logger = logging.getLogger(__name__)
@@ -253,7 +258,8 @@ OPEN_MORE_BUTTON_JS = (
   if (!actionRoot) return false;
   const moreBtn = actionRoot.querySelector('button[aria-expanded]');
   if (!moreBtn) return false;
-  moreBtn.click();
+  // Tagged, not clicked: Python clicks it with real mouse input.
+  moreBtn.setAttribute('data-shipsmind-click', 'more');
   return true;
 })
 """
@@ -275,7 +281,8 @@ CLICK_INCOMING_ACCEPT_JS = (
   if (!main) return false;
   const row = findIncomingActionRow(main);
   if (!row) return false;
-  row.querySelectorAll('button[aria-label]')[0].click();
+  // Tagged, not clicked: Python clicks it with real mouse input.
+  row.querySelectorAll('button[aria-label]')[0].setAttribute('data-shipsmind-click', 'accept');
   return true;
 })
 """
@@ -368,9 +375,9 @@ class ConnectionActions:
             async with linkedin_element(
                 buttons.nth(count - 1), timeout=timeout
             ) as button:
-                await button.click(timeout=timeout)
+                await human_input.move_and_click(self._session.page, button)
             return True
-        except OffLinkedInLandingError:
+        except (OffLinkedInLandingError, SecurityCheckError, RateLimitError):
             raise
         except Exception:
             logger.debug("Primary dialog button click failed", exc_info=True)
@@ -383,9 +390,9 @@ class ConnectionActions:
             if await self._session.page.locator(_DIALOG_TEXTAREA_SELECTOR).count() == 0:
                 return False
             async with linkedin_element(locator, timeout=timeout) as textarea:
-                await textarea.fill(value, timeout=timeout)
+                await human_input.human_type(self._session.page, textarea, value)
             return True
-        except OffLinkedInLandingError:
+        except (OffLinkedInLandingError, SecurityCheckError, RateLimitError):
             raise
         except Exception:
             logger.debug("Invite note fill failed", exc_info=True)
@@ -413,10 +420,10 @@ class ConnectionActions:
         if element is None:
             await focused.dispose()
             async with linkedin_element(self._session.page.locator("body")) as body:
-                await body.press("Escape")
+                await human_input.press_key(self._session.page, "Escape", body)
             return
         async with linkedin_handle(element) as target:
-            await target.press("Escape")
+            await human_input.press_key(self._session.page, "Escape", target)
 
     async def _dismiss_dialog(self) -> None:
         """Dismiss any open dialog via Escape key (structural)."""
@@ -461,7 +468,7 @@ class ConnectionActions:
             )
             if isinstance(message, str) and message.strip():
                 return message.strip()
-        except OffLinkedInLandingError:
+        except (OffLinkedInLandingError, SecurityCheckError, RateLimitError):
             raise
         except Exception:
             logger.debug("Could not read Premium upsell dialog text", exc_info=True)
@@ -474,7 +481,7 @@ class ConnectionActions:
                 link_text = await link.inner_text()
             if link_text.strip():
                 return link_text.strip()
-        except OffLinkedInLandingError:
+        except (OffLinkedInLandingError, SecurityCheckError, RateLimitError):
             raise
         except Exception:
             pass
@@ -497,8 +504,11 @@ class ConnectionActions:
         contents itself.
         """
         try:
-            clicked = await self._session.run_on_linkedin(OPEN_MORE_BUTTON_JS)
-        except OffLinkedInLandingError:
+            tagged = await self._session.run_on_linkedin(OPEN_MORE_BUTTON_JS)
+            clicked = bool(tagged) and await human_input.click_marked(
+                self._session.page, self._session.run_on_linkedin, "more"
+            )
+        except (OffLinkedInLandingError, SecurityCheckError, RateLimitError):
             raise
         except Exception:
             logger.debug("More button click via JS failed", exc_info=True)
@@ -524,8 +534,11 @@ class ConnectionActions:
         mitigations. Returns True iff the click landed.
         """
         try:
-            return bool(await self._session.run_on_linkedin(CLICK_INCOMING_ACCEPT_JS))
-        except OffLinkedInLandingError:
+            tagged = await self._session.run_on_linkedin(CLICK_INCOMING_ACCEPT_JS)
+            return bool(tagged) and await human_input.click_marked(
+                self._session.page, self._session.run_on_linkedin, "accept"
+            )
+        except (OffLinkedInLandingError, SecurityCheckError, RateLimitError):
             raise
         except Exception:
             logger.debug("Incoming accept click via JS failed", exc_info=True)
@@ -551,7 +564,7 @@ class ConnectionActions:
             return bool(
                 await self._session.run_on_linkedin(INVITATION_PENDING_JS, username)
             )
-        except OffLinkedInLandingError:
+        except (OffLinkedInLandingError, SecurityCheckError, RateLimitError):
             raise
         except Exception:
             logger.debug("Sent-invitations check failed", exc_info=True)
@@ -637,7 +650,7 @@ class ConnectionActions:
                 btn_count = await buttons.count()
                 if btn_count >= 2:
                     async with linkedin_element(buttons.nth(btn_count - 2)) as add_note:
-                        await add_note.click()
+                        await human_input.move_and_click(self._session.page, add_note)
                     textarea_appeared = True
                     try:
                         await self._session.page.wait_for_selector(
@@ -710,9 +723,9 @@ class ConnectionActions:
                     # Through the handle, so Enter lands on this button in
                     # this document rather than on whatever holds focus.
                     async with linkedin_element(buttons.nth(btn_count - 1)) as button:
-                        await button.press("Enter")
+                        await human_input.press_key(self._session.page, "Enter", button)
                     sent = not await self._dialog_is_open(timeout=2000)
-                except OffLinkedInLandingError:
+                except (OffLinkedInLandingError, SecurityCheckError, RateLimitError):
                     raise
                 except Exception:
                     logger.debug("Keyboard submit fallback failed", exc_info=True)
@@ -802,8 +815,8 @@ class ConnectionActions:
         if btn_count >= 3:
             try:
                 async with linkedin_element(buttons.nth(btn_count - 2)) as add_note:
-                    await add_note.click()
-            except OffLinkedInLandingError:
+                    await human_input.move_and_click(self._session.page, add_note)
+            except (OffLinkedInLandingError, SecurityCheckError, RateLimitError):
                 raise
             except Exception:
                 logger.debug("Could not open invite note editor", exc_info=True)
@@ -905,7 +918,7 @@ class ConnectionActions:
             verified_state = None
             for attempt in range(2):
                 if attempt:
-                    await asyncio.sleep(3.0)
+                    await human_input.action_pause()
                 verified = await self._read_main_profile(username)
                 verified_text = verified.get("sections", {}).get("main_profile", "")
                 verified_signals = await self._read_action_signals(username)
@@ -941,7 +954,7 @@ class ConnectionActions:
                 # doesn't intercept the upcoming page transition.
                 try:
                     await self._press_escape()
-                except OffLinkedInLandingError:
+                except (OffLinkedInLandingError, SecurityCheckError, RateLimitError):
                     raise
                 except Exception:
                     logger.debug("Escape after More-menu reread failed", exc_info=True)
@@ -1010,7 +1023,7 @@ class ConnectionActions:
             # recorded (observed live 2026-09-26: send_failed, then Pending).
             # Only a pending or already accepted invitation is evidence it
             # landed.
-            await asyncio.sleep(3.0)
+            await human_input.action_pause()
             retry = await self._read_main_profile(username)
             retry_signals = await self._read_action_signals(username)
             if connection.detect_connection_state(retry_signals) in (
