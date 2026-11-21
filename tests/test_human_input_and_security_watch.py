@@ -672,3 +672,59 @@ def test_watch_signals_and_near_misses_are_logged(events):
     assert any(e["step"] == "watch_signal" and e["tripped"] for e in events)
     trip = [e for e in events if e["step"] == "tripwire"]
     assert trip and trip[0]["rule"] == "response-999"
+
+
+# --- the person's own sign-in (--login) is not watched (2026-11-21) -------------------
+
+
+class _HookedContext:
+    def __init__(self):
+        self.hooks = []
+        self.pages = []
+
+    def on(self, event, fn):
+        self.hooks.append(event)
+
+    async def cookies(self, *args, **kwargs):
+        return []
+
+
+async def test_during_the_persons_sign_in_the_watch_is_not_installed():
+    sw.reset_watch_for_testing()
+    try:
+        sw.begin_person_sign_in()
+        ctx = _HookedContext()
+        await sw.install_security_watch(ctx)
+        assert ctx.hooks == []
+    finally:
+        sw.reset_watch_for_testing()
+
+
+def test_during_the_persons_sign_in_google_and_checks_never_trip():
+    sw.reset_watch_for_testing()
+    try:
+        sw.begin_person_sign_in()
+        sw.TRIPWIRE.trip(sw.CHECK, "navigation-off-linkedin",
+                         "https://accounts.google.com/v3/signin/identifier")
+        assert not sw.TRIPWIRE.tripped()
+        sw.raise_if_tripped()  # does not raise
+    finally:
+        sw.reset_watch_for_testing()
+
+
+def test_outside_sign_in_leaving_linkedin_still_trips():
+    sw.reset_watch_for_testing()
+    try:
+        sw.TRIPWIRE.trip(sw.CHECK, "navigation-off-linkedin",
+                         "https://accounts.google.com/v3/signin/identifier")
+        with pytest.raises(SecurityCheckError):
+            sw.raise_if_tripped()
+    finally:
+        sw.reset_watch_for_testing()
+
+
+def test_the_login_command_puts_the_process_in_sign_in_mode():
+    source = (Path(sw.__file__).parents[1] / "cli_main.py").read_text(encoding="utf-8")
+    block = source[source.index("if config.server.login:"):]
+    block = block[:block.index("get_profile_and_exit()")]
+    assert "begin_person_sign_in()" in block

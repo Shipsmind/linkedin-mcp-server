@@ -870,6 +870,11 @@ def main(argv: Sequence[str] | None = None) -> None:
 
         # Handle --login flag
         if config.server.login:
+            # The person signs in by hand: the security watch stands down for
+            # this process only (it guards the automation, not the person).
+            from linkedin_mcp_server.core.security_watch import begin_person_sign_in
+
+            begin_person_sign_in()
             get_profile_and_exit()
 
         # Handle --status flag
