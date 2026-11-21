@@ -45,6 +45,7 @@ from typing import Any
 from urllib.parse import urlparse
 from weakref import WeakSet
 
+from .activity_log import emit
 from .exceptions import RateLimitError, SecurityCheckError
 
 logger = logging.getLogger(__name__)
@@ -145,6 +146,7 @@ class Tripwire:
             self._signal = Signal(
                 severity, rule, url[:500], detail[:300], status, time.time()
             )
+        emit("tripwire", rule=rule, url=url[:500], severity=severity, status=status)
         logger.warning(
             "LinkedIn %s tripped by %s: %s %s", severity, rule, url[:200], detail[:200]
         )
@@ -414,17 +416,35 @@ def _on_response(response: Any, signed_in: bool) -> None:
     except Exception:  # noqa: BLE001
         return
     found = classify_response(status, url, headers)
+    request = getattr(response, "request", None)
+    if getattr(request, "resource_type", None) == "document":
+        emit("page_loaded", url=url[:500], status=status)
     if found:
+        _signal(found[1], url, status, True)
         TRIPWIRE.trip(found[0], found[1], url, status=status)
         return
+    if is_linkedin_host(_host(url)) and status >= 400:
+        _signal("http-error-ignored", url, status, False)
     if signed_in and is_linkedin_host(_host(url)) and cookie_deletes_session(headers):
         TRIPWIRE.trip(CHECK, "cookie-deleted", url, "Set-Cookie removed li_at", status)
+
+
+def _signal(rule: str, url: str, status: int | None, tripped: bool) -> None:
+    emit("watch_signal", rule=rule, url=url[:500], status=status, tripped=tripped)
+
+
+#: Looks like a challenge but is not one (the hidden reCAPTCHA anchor, the
+#: Cloudflare jsd script): logged as a near-miss, never tripped.
+_NEAR_MISS_RE = re.compile(r"captcha|challenge", re.IGNORECASE)
 
 
 def _on_request(request: Any) -> None:
     url = str(getattr(request, "url", "") or "")
     if classify_request_url(url):
+        _signal("request-challenge-url", url, None, True)
         TRIPWIRE.trip(CHECK, "request-challenge-url", url)
+    elif _NEAR_MISS_RE.search(url):
+        _signal("near-miss-ignored", url, None, False)
 
 
 def _on_request_failed(request: Any) -> None:
@@ -458,14 +478,21 @@ def watch_page(page: Any, *, signed_in: bool = True) -> None:
         if is_main:
             found = classify_main_frame_url(url, signed_in=signed_in)
             if found:
+                _signal(found[1], url, None, True)
                 TRIPWIRE.trip(found[0], found[1], url)
         elif classify_request_url(url):
+            _signal("frame-challenge-url", url, None, True)
             TRIPWIRE.trip(CHECK, "frame-challenge-url", url)
+        elif _NEAR_MISS_RE.search(url):
+            _signal("near-miss-ignored", url, None, False)
 
     def on_attached(frame: Any) -> None:
         url = str(getattr(frame, "url", "") or "")
         if classify_request_url(url):
+            _signal("frame-challenge-url", url, None, True)
             TRIPWIRE.trip(CHECK, "frame-challenge-url", url)
+        elif _NEAR_MISS_RE.search(url):
+            _signal("near-miss-ignored", url, None, False)
 
     try:
         on("response", lambda r: _on_response(r, signed_in))

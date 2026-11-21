@@ -32,6 +32,7 @@ def reset_singletons():
     from linkedin_mcp_server.config import reset_config
     from linkedin_mcp_server.core.throttle import reset_throttle_record
     from linkedin_mcp_server.core.security_watch import reset_watch_for_testing
+    from linkedin_mcp_server.core.activity_log import set_activity_sink
     from linkedin_mcp_server.core.human_input import HumanPacer, set_pacer_for_testing
     from linkedin_mcp_server.daemon.descriptor import (
         reset_daemon_descriptor_for_testing,
@@ -62,6 +63,7 @@ def reset_singletons():
     # The security tripwire and the pacer are process state too: a check one
     # test tripped would stop every later test's input.
     reset_watch_for_testing()
+    set_activity_sink(None)
     set_pacer_for_testing(HumanPacer(enabled=False))
     # Every test that builds a server records a role, and the auth gates read it
     # from process state. Left standing, one OWNER would refuse logins in every

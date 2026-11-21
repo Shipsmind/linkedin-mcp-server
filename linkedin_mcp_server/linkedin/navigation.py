@@ -9,6 +9,7 @@ from typing import Any, Literal
 import logging
 import re
 
+from linkedin_mcp_server.core.activity_log import emit
 from linkedin_mcp_server.core.security_watch import (
     raise_if_tripped,
     set_active_page,
@@ -174,6 +175,7 @@ class PageNavigator:
         raise_if_tripped()
         page = self._session.page
         set_active_page(page)
+        emit("navigate", url=url)
         timeout_ms: float = self._GOTO_TIMEOUT_MS
         overall_ms: float | None = None
         if deadline is not None:

@@ -596,3 +596,79 @@ async def test_a_row_that_does_not_open_a_thread_stops_the_scan():
     assert [r["threadId"] for r in outcome["rows"]] == ["t-a"]
     assert outcome["stoppedAt"] == {"ariaLabel": "B", "position": 1}
     assert session.clicked == [0, 1]  # row C is never clicked
+
+
+# --- activity log -------------------------------------------------------------
+
+
+@pytest.fixture
+def events():
+    from linkedin_mcp_server.core import activity_log
+
+    captured: list[dict] = []
+    activity_log.set_activity_sink(captured.append)
+    yield captured
+    activity_log.set_activity_sink(None)
+
+
+async def test_the_activity_log_captures_each_step(events, pacer):
+    page = FakePage()
+    await hi.move_and_click(
+        page, FakeTarget({"x": 100, "y": 100, "width": 80, "height": 30})
+    )
+    await hi.wheel_burst(page, 3)
+    await hi.action_pause()
+    steps = [e["step"] for e in events]
+    assert {"mouse_move", "click", "wheel_burst", "pause"} <= set(steps)
+    pause = next(e for e in events if e["step"] == "pause")
+    assert pause["kind"] == "action" and 2.0 <= pause["planned_s"] <= 20.0
+    assert all(isinstance(e["t"], float) for e in events)
+    burst = next(e for e in events if e["step"] == "wheel_burst")
+    assert burst["notches"] == 3 and burst["px"] > 0
+
+
+async def test_the_activity_log_never_contains_typed_text(events, pacer):
+    page = FakePage()
+    secret = "Hello Ada, private note 4242"
+    await hi.type_text(page, secret)
+    typing = [e for e in events if e["step"] == "type"]
+    assert typing and typing[0]["chars"] == len(secret)
+    blob = repr(events)
+    for word in ("Hello", "Ada", "private", "4242"):
+        assert word not in blob
+
+
+async def test_a_raising_sink_does_not_break_input(pacer):
+    from linkedin_mcp_server.core import activity_log
+
+    def broken(_event: dict) -> None:
+        raise RuntimeError("disk full")
+
+    activity_log.set_activity_sink(broken)
+    try:
+        page = FakePage()
+        await hi.move_and_click(
+            page, FakeTarget({"x": 10, "y": 10, "width": 50, "height": 20})
+        )
+        await hi.type_text(page, "ok")
+    finally:
+        activity_log.set_activity_sink(None)
+    assert ("down",) in page.log and [e[1] for e in page.log if e[0] == "type"] == [
+        "o",
+        "k",
+    ]
+
+
+def test_watch_signals_and_near_misses_are_logged(events):
+    page = FakePage()
+    sw.watch_page(page)
+    page.emit("request", Obj(url="https://www.google.com/recaptcha/api2/anchor?k=1"))
+    assert sw.TRIPWIRE.signal is None
+    near = [e for e in events if e["step"] == "watch_signal"]
+    assert (
+        near and near[0]["tripped"] is False and near[0]["rule"] == "near-miss-ignored"
+    )
+    page.emit("response", _response(999, "https://www.linkedin.com/in/x/"))
+    assert any(e["step"] == "watch_signal" and e["tripped"] for e in events)
+    trip = [e for e in events if e["step"] == "tripwire"]
+    assert trip and trip[0]["rule"] == "response-999"

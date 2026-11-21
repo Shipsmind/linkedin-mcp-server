@@ -35,6 +35,7 @@ import asyncio
 import logging
 import math
 import re
+import time
 import os
 import random
 import weakref
@@ -42,6 +43,7 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
 from linkedin_mcp_server.core.exceptions import SecurityCheckError  # noqa: F401 - re-exported
+from linkedin_mcp_server.core.activity_log import emit
 from linkedin_mcp_server.core.security_watch import (
     CHECK,
     TRIPWIRE,
@@ -195,17 +197,29 @@ class HumanPacer:
                 raise_if_tripped()
         return seconds
 
+    async def _logged_pause(self, kind: str, planned: float) -> float:
+        started = time.monotonic()
+        try:
+            return await self.wait(planned)
+        finally:
+            emit(
+                "pause",
+                kind=kind,
+                planned_s=round(planned, 3),
+                actual_s=round(time.monotonic() - started, 3),
+            )
+
     async def action_pause(self) -> float:
-        return await self.wait(self.draw_action_pause())
+        return await self._logged_pause("action", self.draw_action_pause())
 
     async def page_load_pause(self) -> float:
-        return await self.wait(self.draw_page_load_pause())
+        return await self._logged_pause("page_load", self.draw_page_load_pause())
 
     async def settle_after_load(self) -> float:
-        return await self.wait(self.draw_settle_after_load())
+        return await self._logged_pause("settle", self.draw_settle_after_load())
 
     async def read_pause(self, text_len: int) -> float:
-        return await self.wait(self.draw_read_pause(text_len))
+        return await self._logged_pause("read", self.draw_read_pause(text_len))
 
     async def short(self, low: float, high: float) -> float:
         """A small random wait inside one gesture (ms-scale steps, holds)."""
@@ -321,8 +335,11 @@ async def move_mouse_to(page: Any, x: float, y: float) -> None:
     else:
         legs = [target]
     current = start
+    started = time.monotonic()
+    steps = 0
     for leg in legs:
         path = bezier_path(current, leg, rng)
+        steps += len(path)
         # Fitts-like move time 0.35-1.2 s spread over the steps, unevenly.
         total = rng.uniform(0.35, 1.2) * p.session_speed
         weights = [rng.uniform(0.6, 1.4) for _ in path]
@@ -333,6 +350,7 @@ async def move_mouse_to(page: Any, x: float, y: float) -> None:
             await p.wait(w * scale)
         current = leg
     _remember_pointer(page, x, y)
+    emit("mouse_move", steps=steps, duration_s=round(time.monotonic() - started, 3))
 
 
 async def _box(target: Any) -> dict[str, float] | None:
@@ -389,8 +407,9 @@ async def move_and_click(page: Any, target: Any) -> None:
     await p.short(0.1, 0.4)  # hover
     await raise_if_security_check(page)
     await page.mouse.down()
-    await p.short(0.07, 0.16)  # press held
+    held = await p.short(0.07, 0.16)  # press held
     await page.mouse.up()
+    emit("click", hold_ms=round(held * 1000))
 
 
 # --- scrolling --------------------------------------------------------------
@@ -401,10 +420,14 @@ async def wheel_burst(page: Any, notches: int) -> None:
     p = pacer()
     rng = p.rng
     direction = 1 if notches >= 0 else -1
+    moved = 0.0
     for _ in range(abs(notches)):
         raise_if_tripped()
-        await page.mouse.wheel(0, direction * rng.uniform(85, 120))
+        delta = direction * rng.uniform(85, 120)
+        await page.mouse.wheel(0, delta)
+        moved += delta
         await p.short(0.03, 0.09)
+    emit("wheel_burst", notches=notches, px=round(moved))
 
 
 async def wheel_scroll(
@@ -601,6 +624,39 @@ async def type_text(
     still_focused: Callable[[], Awaitable[bool]] | None = None,
     newline_key: str = "Shift+Enter",
 ) -> str:
+    """Type *text* like a person; see :func:`_type_text`. Logs counts, never text."""
+    stats = {"typos": 0}
+    started = time.monotonic()
+    typed = ""
+    try:
+        typed = await _type_text(
+            page,
+            text,
+            typos=typos,
+            still_focused=still_focused,
+            newline_key=newline_key,
+            stats=stats,
+        )
+        return typed
+    finally:
+        emit(
+            "type",
+            chars=len(typed),
+            planned_chars=len(text),
+            duration_s=round(time.monotonic() - started, 3),
+            typos=stats["typos"],
+        )
+
+
+async def _type_text(
+    page: Any,
+    text: str,
+    *,
+    typos: bool,
+    still_focused: Callable[[], Awaitable[bool]] | None,
+    newline_key: str,
+    stats: dict[str, int],
+) -> str:
     """Type *text* where the caret is, one key at a time, like a person.
 
     Per-key typing gives the page time to move focus mid-text, which a single
@@ -632,6 +688,7 @@ async def type_text(
         lower = char.lower()
         if typos and p.enabled and lower in _NEIGHBOURS and rng.random() < 0.015:
             wrong = rng.choice(_NEIGHBOURS[lower])
+            stats["typos"] += 1
             raise_if_tripped()
             await page.keyboard.type(wrong if char.islower() else wrong.upper())
             await p.wait(_key_delay(rng, p.session_speed))
