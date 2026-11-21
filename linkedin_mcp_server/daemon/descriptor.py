@@ -114,6 +114,8 @@ SHARED_CONFIG_FIELDS = (
     "viewport_width",
     "viewport_height",
     "default_timeout",
+    "content_timeout",
+    "navigation_timeout",
     "chrome_path",
     "proxy_server",
     "proxy_username",
