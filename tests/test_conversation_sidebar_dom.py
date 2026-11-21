@@ -28,7 +28,9 @@ from __future__ import annotations
 
 from typing import Any
 
+import asyncio
 import json
+from unittest.mock import patch
 
 import pytest
 from patchright.async_api import Page, async_playwright
@@ -312,59 +314,58 @@ def phased_sidebar(rows: list[dict[str, Any]]) -> str:
     return _PHASED_SIDEBAR.replace("__ROWS__", json.dumps(rows))
 
 
+# The route poll after a row click runs in Python (PageSession.delay, then a
+# read of the pathname), not in a page timer. The control below wraps that
+# delay for the scan() helper.
+_POLL_CONTROL: dict[str, Any] = {}
+
+
 async def install_poll_control(
     page: Page,
     *,
     release: tuple[str, int] | None = None,
     accelerate: bool = False,
 ) -> None:
-    """Wrap the scan's poll timer inside Patchright's isolated world.
+    """Control the scan's route poll, which runs in Python after each click.
 
-    Every requested delay is recorded. ``release=(row, n)`` completes that
-    row's pending landing immediately before its ``n``-th poll callback runs,
-    so observations ``1`` to ``n - 1`` are known to have seen the pre-landing
-    path and observation ``n`` sees the landing. Counting callbacks rather
-    than timer requests matters: a request is recorded before its callback
-    and before the observation that follows it, so a count of requests
-    releases one observation early.
+    Every requested delay is recorded (in ms). ``release=(row, n)`` completes
+    that row's pending landing immediately before its ``n``-th observation:
+    after the ``n``-th delay, before the pathname is read, so observations
+    ``1`` to ``n - 1`` saw the pre-landing path and observation ``n`` sees the
+    landing. The count restarts whenever a different row was clicked.
 
-    ``accelerate`` fires each callback without waiting; the requested delay is
-    still recorded. Only the timer is replaced, so the production loop still
-    executes in the browser.
+    ``accelerate`` skips the wait itself; the requested delay is still
+    recorded. Only the delay is replaced, so the production loop still runs
+    and still reads the browser's own pathname.
     """
-    await page.evaluate(
-        """({ release, accelerate }) => {
-            globalThis.linkedinMcpPollDelays = [];
-            const nativeSetTimeout = globalThis.setTimeout;
-            let current = null;
-            let count = 0;
-            globalThis.setTimeout = (callback, delay, ...args) => {
-                const events = JSON.parse(
-                    document.getElementById('events').textContent
-                );
-                const clicked = events.filter(e => 'click' in e).at(-1)?.click
-                    ?? null;
-                if (clicked !== current) {
-                    current = clicked;
-                    count = 0;
-                }
-                count += 1;
-                const rowId = current;
-                const observation = count;
-                globalThis.linkedinMcpPollDelays.push(delay);
-                return nativeSetTimeout(() => {
-                    if (release && rowId === release[0]
-                        && observation === release[1]) {
-                        document.dispatchEvent(
-                            new Event(`fixture-release-${release[0]}`)
-                        );
-                    }
-                    callback(...args);
-                }, accelerate ? 0 : delay);
-            };
-        }""",
-        {"release": list(release) if release else None, "accelerate": accelerate},
+    _POLL_CONTROL.clear()
+    _POLL_CONTROL.update(
+        page=page,
+        release=release,
+        accelerate=accelerate,
+        delays=[],
+        current=None,
+        count=0,
     )
+
+
+async def _controlled_delay(page: Page, seconds: float) -> None:
+    control = _POLL_CONTROL
+    log = await events(page)
+    clicked_row = next((e["click"] for e in reversed(log) if "click" in e), None)
+    if clicked_row != control["current"]:
+        control["current"] = clicked_row
+        control["count"] = 0
+    control["count"] += 1
+    control["delays"].append(round(seconds * 1000))
+    if not control["accelerate"]:
+        await asyncio.sleep(seconds)
+    release = control["release"]
+    if release and clicked_row == release[0] and control["count"] == release[1]:
+        await page.evaluate(
+            "(id) => document.dispatchEvent(new Event(`fixture-release-${id}`))",
+            release[0],
+        )
 
 
 async def serve(page: Page, html: str, *, start: str = BASE_URL) -> None:
@@ -401,7 +402,9 @@ async def clicked(page: Page) -> list[str]:
 
 
 async def poll_delays(page: Page) -> list[int]:
-    return await page.evaluate("() => globalThis.linkedinMcpPollDelays")
+    if _POLL_CONTROL.get("page") is not page:
+        return []
+    return list(_POLL_CONTROL["delays"])
 
 
 async def scan(
@@ -411,9 +414,19 @@ async def scan(
     context: str = "inbox",
     name_filter: str | None = None,
 ) -> Any:
-    return await _reader(page)._extract_conversation_thread_refs(
-        limit=limit, context=context, name_filter=name_filter
-    )
+    reader = _reader(page)
+    if _POLL_CONTROL.get("page") is not page:
+        return await reader._extract_conversation_thread_refs(
+            limit=limit, context=context, name_filter=name_filter
+        )
+
+    async def delay(_session: PageSession, seconds: float) -> None:
+        await _controlled_delay(page, seconds)
+
+    with patch.object(PageSession, "delay", delay):
+        return await reader._extract_conversation_thread_refs(
+            limit=limit, context=context, name_filter=name_filter
+        )
 
 
 def attributed(outcome: Any) -> list[tuple[str | None, str]]:
@@ -973,15 +986,6 @@ class TestThreadOwnershipAgainstRealDom:
         assert attributed(outcome) == []
         assert stop_of(outcome) == ("Select conversation with A", 0)
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Shipsmind fork: rows are now opened from Python with real clicks and"
-            " the route poll runs in Python (12 x 100 ms); this test's fixture"
-            " releases the route on the in-page loop's timer callbacks, which no"
-            " longer exist. Rework the fixture to tick on PageSession.delay."
-        ),
-    )
     async def test_a_loading_route_is_waited_through_to_the_thread(self, dom_page):
         """Observation 1 sees ``/messaging/loading/``; observation 2 sees B.
 
@@ -1006,15 +1010,6 @@ class TestThreadOwnershipAgainstRealDom:
             {"land": "A", "path": "/messaging/thread/B/"},
         ]
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Shipsmind fork: rows are now opened from Python with real clicks and"
-            " the route poll runs in Python (12 x 100 ms); this test's fixture"
-            " releases the route on the in-page loop's timer callbacks, which no"
-            " longer exist. Rework the fixture to tick on PageSession.delay."
-        ),
-    )
     async def test_a_loading_route_that_never_lands_is_a_stop(self, dom_page):
         await serve(
             dom_page,
@@ -1029,15 +1024,6 @@ class TestThreadOwnershipAgainstRealDom:
         assert stop_of(outcome) == ("Select conversation with A", 0)
         assert await poll_delays(dom_page) == [100] * 12
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Shipsmind fork: rows are now opened from Python with real clicks and"
-            " the route poll runs in Python (12 x 100 ms); this test's fixture"
-            " releases the route on the in-page loop's timer callbacks, which no"
-            " longer exist. Rework the fixture to tick on PageSession.delay."
-        ),
-    )
     async def test_loading_back_to_the_same_thread_is_not_a_move(self, dom_page):
         """A → loading → A: the route changed twice and the thread did not."""
         await serve(
@@ -1054,15 +1040,6 @@ class TestThreadOwnershipAgainstRealDom:
         assert await poll_delays(dom_page) == [100] * 12
         assert {"land": "A", "path": "/messaging/thread/A/"} in await events(dom_page)
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Shipsmind fork: rows are now opened from Python with real clicks and"
-            " the route poll runs in Python (12 x 100 ms); this test's fixture"
-            " releases the route on the in-page loop's timer callbacks, which no"
-            " longer exist. Rework the fixture to tick on PageSession.delay."
-        ),
-    )
     async def test_a_slow_later_row_gets_its_own_full_poll_budget(self, dom_page):
         """B lands before its second callback, after A already succeeded.
 
@@ -1210,15 +1187,6 @@ class TestThreadOwnershipAgainstRealDom:
         assert outcome.start_thread_id is None
         assert await clicked(dom_page) == ["A", "B"]
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Shipsmind fork: rows are now opened from Python with real clicks and"
-            " the route poll runs in Python (12 x 100 ms); this test's fixture"
-            " releases the route on the in-page loop's timer callbacks, which no"
-            " longer exist. Rework the fixture to tick on PageSession.delay."
-        ),
-    )
     async def test_a_row_that_never_routes_uses_the_exact_poll_budget(self, dom_page):
         """A stalled route gets exactly twelve 100 ms chances, then a stop.
 
@@ -1240,15 +1208,6 @@ class TestThreadOwnershipAgainstRealDom:
         assert await poll_delays(dom_page) == [100] * 12
         assert stop_of(outcome) == ("Select conversation with A", 0)
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Shipsmind fork: rows are now opened from Python with real clicks and"
-            " the route poll runs in Python (12 x 100 ms); this test's fixture"
-            " releases the route on the in-page loop's timer callbacks, which no"
-            " longer exist. Rework the fixture to tick on PageSession.delay."
-        ),
-    )
     async def test_a_landing_at_the_twelfth_observation_is_accepted(self, dom_page):
         """Released immediately before callback 12, not on the 11th request."""
         await serve(
