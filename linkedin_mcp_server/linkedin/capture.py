@@ -40,6 +40,7 @@ from linkedin_mcp_server.linkedin.navigation import PageNavigator
 from linkedin_mcp_server.linkedin.session import PageSession
 from linkedin_mcp_server.core import human_input
 from linkedin_mcp_server.core.security_watch import raise_if_tripped
+from linkedin_mcp_server.core.timeouts import content_ms, control_ms
 from linkedin_mcp_server.linkedin.text import (
     DETAIL_CAPTURE_EN_US,
     JOB_POSTING_EN_US,
@@ -361,7 +362,7 @@ class SectionCapture:
         await self._session.check_rate_limit()
 
         try:
-            await self._session.page.wait_for_selector("main")
+            await self._session.page.wait_for_selector("main", timeout=content_ms())
         except PlaywrightTimeoutError:
             logger.debug("No <main> element found on %s", url)
 
@@ -375,7 +376,7 @@ class SectionCapture:
                         if (!main) return false;
                         return main.innerText.length > 200;
                     }""",
-                    timeout=10000,
+                    timeout=content_ms(),
                 )
             except PlaywrightTimeoutError:
                 logger.debug("Activity feed content did not appear on %s", url)
@@ -388,14 +389,15 @@ class SectionCapture:
                         if (!main) return false;
                         return main.innerText.length > 100;
                     }""",
-                    timeout=10000,
+                    timeout=content_ms(),
                 )
             except PlaywrightTimeoutError:
                 logger.debug("Search results content did not appear on %s", url)
 
         # Employee text hydrates after the company header. The profile anchors
         # are the only stable structural signal that the listing has arrived.
-        # Empty and restricted listings are common, so keep the shorter timeout.
+        # Empty and restricted listings are common, so keep the shorter (control)
+        # deadline rather than the content one.
         if CaptureMode.COMPANY_PEOPLE in plan.mode:
             try:
                 await self._session.page.wait_for_function(
@@ -404,7 +406,7 @@ class SectionCapture:
                         if (!main) return false;
                         return main.querySelectorAll('a[href*="/in/"]').length > 0;
                     }""",
-                    timeout=5000,
+                    timeout=control_ms(),
                 )
             except PlaywrightTimeoutError:
                 logger.debug("Company people listing did not appear on %s", url)
@@ -413,7 +415,7 @@ class SectionCapture:
             try:
                 await self._session.page.wait_for_function(
                     self._detail_text.readiness_expression(),
-                    timeout=10000,
+                    timeout=content_ms(),
                 )
             except PlaywrightTimeoutError:
                 logger.debug("Detail section content did not appear on %s", url)
@@ -453,7 +455,7 @@ class SectionCapture:
             try:
                 await self._session.page.wait_for_function(
                     self._job_posting_text.readiness_expression(),
-                    timeout=10000,
+                    timeout=content_ms(),
                 )
             except PlaywrightTimeoutError:
                 logger.debug("Job description did not appear on %s", url)
@@ -520,7 +522,7 @@ class SectionCapture:
 
         try:
             await self._session.page.wait_for_selector(
-                "dialog[open], .artdeco-modal__content"
+                "dialog[open], .artdeco-modal__content", timeout=control_ms()
             )
         except PlaywrightTimeoutError:
             logger.debug(

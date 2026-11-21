@@ -16,7 +16,9 @@ class DetailCaptureTextTable:
     expansion_button_pattern: re.Pattern[str]
 
     def readiness_expression(self) -> str:
-        """Build the historical readiness predicate without changing its bytes."""
+        """Build the readiness predicate: <main> has text that is not a loading
+        placeholder. An empty <main> is not ready (Shipsmind fork: it passed
+        before, so a slow details page was read before its sections rendered)."""
         conditions = "\n                            && ".join(
             f"!text.startsWith({prefix!r})"
             for prefix in self.readiness_blocking_prefixes
@@ -26,6 +28,7 @@ class DetailCaptureTextTable:
             "                        const main = document.querySelector('main');\n"
             "                        if (!main) return false;\n"
             "                        const text = main.innerText.trimStart();\n"
+            "                        if (!text.length) return false;\n"
             f"                        return {conditions};\n"
             "                    }"
         )

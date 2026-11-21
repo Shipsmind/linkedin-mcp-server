@@ -455,8 +455,6 @@ async def wheel_scroll(
     )
     screens_wanted = rng.uniform(1.5, 3.2)
     scrolled = 0.0
-    still = 0
-    previous_height = await _scroll_height(page)
     for _ in range(max_bursts):
         await raise_if_security_check(page)
         notches = rng.randint(1, 5)
@@ -476,13 +474,11 @@ async def wheel_scroll(
         current_height = await _scroll_height(page)
         at_bottom = await _at_bottom(page)
         if to_bottom and at_bottom:
-            if current_height == previous_height:
-                still += 1
-                if still >= 2:
-                    return
-            else:
-                still = 0
-        previous_height = current_height
+            # At the bottom: wait for the page to load more (an event wait up
+            # to the control deadline), not for a guessed time. No growth in
+            # that time means the list has ended.
+            if not await _wait_for_growth(page, current_height):
+                return
 
 
 async def wheel_over(page: Any, box: dict[str, float], *, direction: int = 1) -> None:
@@ -500,6 +496,23 @@ async def wheel_over(page: Any, box: dict[str, float], *, direction: int = 1) ->
     for _ in range(rng.randint(1, 2)):
         await wheel_burst(page, (1 if direction >= 0 else -1) * rng.randint(2, 5))
         await p.short(0.8, 4.0)
+
+
+async def _wait_for_growth(page: Any, height: int) -> bool:
+    """Whether the page grows past *height* within the control deadline."""
+    from linkedin_mcp_server.core.timeouts import control_ms
+
+    waiter = getattr(page, "wait_for_function", None)
+    if waiter is None:
+        return False
+    try:
+        await waiter(
+            "(h) => document.body.scrollHeight > h", arg=height, timeout=control_ms()
+        )
+    except Exception:  # noqa: BLE001 - a timeout: nothing more loaded
+        return False
+    raise_if_tripped()
+    return True
 
 
 async def _scroll_height(page: Any) -> int:

@@ -11,6 +11,7 @@ import anyio
 import anyio.lowlevel
 from patchright.async_api import TimeoutError as PlaywrightTimeoutError
 
+from linkedin_mcp_server.core.timeouts import content_ms
 from linkedin_mcp_server.core.exceptions import LinkedInOperationError
 from linkedin_mcp_server.error_diagnostics import build_issue_diagnostics
 from linkedin_mcp_server.linkedin.content import PageContentReader
@@ -235,7 +236,7 @@ class FeedReader:
         await self._session.check_rate_limit()
 
         try:
-            await page.wait_for_selector("main")
+            await page.wait_for_selector("main", timeout=content_ms())
         except PlaywrightTimeoutError:
             logger.debug("No <main> element found on %s", url)
 
@@ -248,7 +249,7 @@ class FeedReader:
                     if (!main) return false;
                     return main.innerText.length > 200;
                 }""",
-                timeout=10000,
+                timeout=content_ms(),
             )
         except PlaywrightTimeoutError:
             logger.debug("Feed content did not appear on %s", url)
@@ -320,8 +321,10 @@ class FeedReader:
                     logger.debug("Feed stopped producing new posts")
                     break
 
-        # Give any in-flight response reads a beat to finish recording URLs.
-        await self._session.delay(0.2)
+        # Let in-flight response reads finish recording URLs: wait for those
+        # reads themselves (bounded), not a guessed beat.
+        if pending_reads:
+            await asyncio.wait(pending_reads, timeout=_IN_LOOP_DRAIN_TIMEOUT)
 
         raw_result = await self._content._extract_root_content(["main"])
         raw = raw_result["text"]

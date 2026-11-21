@@ -10,6 +10,7 @@ import re
 
 from patchright.async_api import TimeoutError as PlaywrightTimeoutError
 
+from linkedin_mcp_server.core.timeouts import content_ms, control_ms
 from linkedin_mcp_server.core.destination import is_linkedin_landing
 from linkedin_mcp_server.core.exceptions import LinkedInOperationError
 from linkedin_mcp_server.error_diagnostics import build_issue_diagnostics
@@ -398,9 +399,12 @@ class PersonReader:
         await self._session.check_rate_limit()
 
         try:
-            await self._session.page.wait_for_selector("main", timeout=5000)
+            await self._session.page.wait_for_selector("main", timeout=content_ms())
         except PlaywrightTimeoutError:
             logger.debug("No <main> element found on %s", url)
+        # The sidebar renders after the top card; a profile may have none, so
+        # this waits only up to the control deadline before reading.
+        await self._session.wait_page_ready("sidebar", timeout=control_ms())
 
         await self._session.dismiss_modal()
 
@@ -450,9 +454,10 @@ class PersonReader:
             await self._session.check_rate_limit()
 
             try:
-                await self._session.page.wait_for_selector("main")
+                await self._session.page.wait_for_selector("main", timeout=content_ms())
             except PlaywrightTimeoutError:
                 logger.debug("No <main> on Show all page for section %s", section_key)
+            await self._session.wait_page_ready("details")
 
             await self._session.dismiss_modal()
 

@@ -43,6 +43,9 @@ class ProfilePageReader:
 
     async def _extract_profile_urn(self) -> str | None:
         """Extract a profile URN only from one unambiguous top-card snapshot."""
+        # The short Message-button probe below runs only once the top card is
+        # rendered, so a slow network does not read an empty top card.
+        await self._session.wait_page_ready("profile")
         resolution = await self._read_message_target()
         return resolution.target.profile_urn if resolution.target else None
 

@@ -10,6 +10,7 @@ import logging
 import re
 
 from linkedin_mcp_server.core.activity_log import emit
+from linkedin_mcp_server.core.timeouts import content_ms
 from linkedin_mcp_server.core.security_watch import (
     raise_if_tripped,
     set_active_page,
@@ -353,9 +354,15 @@ class PageNavigator:
     async def _navigate_to_page(
         self, url: str, *, deadline: float | None = None
     ) -> None:
-        """Navigate to a LinkedIn page and fail fast on auth barriers."""
+        """Navigate to a LinkedIn page and fail fast on auth barriers.
+
+        Then wait for the page's content (an event wait up to the content
+        deadline), so every caller reads a rendered page and any human pause
+        comes after the page is ready, never instead of it.
+        """
         logger.debug("_navigate_to_page: target=%s", url)
         await self._goto_with_auth_checks(url, deadline=deadline)
+        await self._session.wait_page_ready("main")
 
     @contextmanager
     def _watching_navigations(self) -> Generator[list[str]]:
@@ -474,7 +481,8 @@ class PageNavigator:
 
         try:
             await self._session.page.wait_for_load_state(
-                "domcontentloaded", timeout=self._DOCUMENT_READY_TIMEOUT * 1000
+                "domcontentloaded",
+                timeout=max(self._DOCUMENT_READY_TIMEOUT * 1000, content_ms()),
             )
         except Exception:
             logger.debug("Replacement document was not ready in time", exc_info=True)

@@ -35,6 +35,7 @@ a page-owning collaborator.
 | `link_metadata` | `RawReference`, `Reference`, `ReferenceKind`, `build_references()`, `choose_reference_text()`, `classify_link()`, `clean_heading()`, `clean_label()`, `dedupe_references()`, `derive_context()`, `normalize_reference()`, `normalize_url()` | `browser-free` |
 | `message_sender` | `MessageSender` | `page-owning` |
 | `navigation` | `PageNavigator`, `WaitUntil` | `page-owning` |
+| `page_ready` | `READY_JS` | `browser-free` |
 | `person` | `PersonReader` | `page-owning` |
 | `posts` | `PostSearch` | `browser-free` |
 | `profile_editor` | `ProfileEditor` | `page-owning` |
@@ -66,13 +67,14 @@ a page-owning collaborator.
 - `link_metadata` -> `identifiers`
 - `message_sender` -> `contracts`, `identifiers`, `navigation`, `session`
 - `navigation` -> `session`
+- `page_ready` -> _(none)_
 - `person` -> `capture`, `contracts`, `fields`, `identifiers`, `link_metadata`, `navigation`, `profile_page`, `search_urls`, `session`, `text`
 - `posts` -> `capture`, `contracts`, `link_metadata`, `search_urls`
 - `profile_editor` -> `navigation`, `profile_selectors`, `session`
 - `profile_page` -> `session`
 - `profile_selectors` -> _(none)_
 - `search_urls` -> `contracts`
-- `session` -> _(none)_
+- `session` -> `page_ready`
 - `text` -> _(none)_
 
 ## `LinkedInExtractor` public coroutine surface

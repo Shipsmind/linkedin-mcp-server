@@ -31,6 +31,7 @@ from urllib.parse import urlparse
 from linkedin_mcp_server.core import human_input
 from linkedin_mcp_server.core.activity_log import emit
 from linkedin_mcp_server.core.security_watch import is_linkedin_host, raise_if_tripped
+from linkedin_mcp_server.core.timeouts import content_ms, control_ms
 from linkedin_mcp_server.linkedin.navigation import PageNavigator
 from linkedin_mcp_server.linkedin.session import PageSession
 
@@ -169,6 +170,8 @@ class Browsing:
     async def browse_feed(self, max_screens: int | None = None) -> dict[str, Any]:
         """Scroll the home feed for a few screens. Clicks nothing on it."""
         await self._go("/feed/", _FEED_NAV)
+        # The feed's posts rendered (an event wait), then a person's settle.
+        await self._session.wait_page_ready("feed")
         await human_input.settle_after_load()
         rng = human_input.pacer().rng
         screens = rng.randint(1, 4)
@@ -188,6 +191,7 @@ class Browsing:
             )
         path = _GLANCE_PATHS[kind]
         await self._go(path, _GLANCE_NAV[kind])
+        await self._session.wait_page_ready("inbox" if kind == "messaging" else "main")
         await human_input.settle_after_load()
         await self._read_screen()
         screens = human_input.pacer().rng.randint(0, 3)
@@ -220,7 +224,7 @@ class Browsing:
         await human_input.clear_and_type(self._page, box, name.strip())
         try:
             await self._page.wait_for_selector(
-                _TYPEAHEAD, state="visible", timeout=4000
+                _TYPEAHEAD, state="visible", timeout=control_ms()
             )
         except Exception:  # noqa: BLE001 - no typeahead: the results page decides
             pass
@@ -232,7 +236,7 @@ class Browsing:
         await human_input.press_key(self._page, "Enter")
         try:
             await self._page.wait_for_selector(
-                _RESULT_PROFILE_LINKS, state="attached", timeout=10000
+                _RESULT_PROFILE_LINKS, state="attached", timeout=content_ms()
             )
         except Exception:  # noqa: BLE001 - no results at all
             emit("search_no_match", via="results")
@@ -260,6 +264,8 @@ class Browsing:
 
     async def _landed(self, wanted: str) -> bool:
         if await self._wait_for_path(wanted):
+            # The profile's top card rendered before anything reads it.
+            await self._session.wait_page_ready("profile")
             await human_input.settle_after_load()
             return True
         # Case or encoding may differ between the link and the address.
