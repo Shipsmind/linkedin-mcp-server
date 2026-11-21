@@ -36,7 +36,10 @@ import pytest
 from patchright.async_api import Page, async_playwright
 
 from linkedin_mcp_server.linkedin.content import PageContentReader
-from linkedin_mcp_server.linkedin.conversations import ConversationReader
+from linkedin_mcp_server.linkedin.conversations import (
+    ConversationReader,
+    _row_route_polls,
+)
 from linkedin_mcp_server.linkedin.navigation import PageNavigator
 from linkedin_mcp_server.linkedin.profile_page import ProfilePageReader
 from linkedin_mcp_server.linkedin.session import PageSession
@@ -1022,7 +1025,7 @@ class TestThreadOwnershipAgainstRealDom:
 
         assert attributed(outcome) == []
         assert stop_of(outcome) == ("Select conversation with A", 0)
-        assert await poll_delays(dom_page) == [100] * 12
+        assert await poll_delays(dom_page) == [100] * _row_route_polls()
 
     async def test_loading_back_to_the_same_thread_is_not_a_move(self, dom_page):
         """A → loading → A: the route changed twice and the thread did not."""
@@ -1037,7 +1040,7 @@ class TestThreadOwnershipAgainstRealDom:
 
         assert attributed(outcome) == []
         assert stop_of(outcome) == ("Select conversation with A", 0)
-        assert await poll_delays(dom_page) == [100] * 12
+        assert await poll_delays(dom_page) == [100] * _row_route_polls()
         assert {"land": "A", "path": "/messaging/thread/A/"} in await events(dom_page)
 
     async def test_a_slow_later_row_gets_its_own_full_poll_budget(self, dom_page):
@@ -1188,7 +1191,8 @@ class TestThreadOwnershipAgainstRealDom:
         assert await clicked(dom_page) == ["A", "B"]
 
     async def test_a_row_that_never_routes_uses_the_exact_poll_budget(self, dom_page):
-        """A stalled route gets exactly twelve 100 ms chances, then a stop.
+        """A stalled route gets 100 ms reads for the whole control deadline
+        (at least twelve), then a stop.
 
         The timer is replaced inside Patchright's isolated evaluation world so
         the browser still executes the production loop without making this test
@@ -1205,23 +1209,23 @@ class TestThreadOwnershipAgainstRealDom:
 
         assert await clicked(dom_page) == ["A"]
         assert outcome.refs == []
-        assert await poll_delays(dom_page) == [100] * 12
+        assert await poll_delays(dom_page) == [100] * _row_route_polls()
         assert stop_of(outcome) == ("Select conversation with A", 0)
 
     async def test_a_landing_at_the_twelfth_observation_is_accepted(self, dom_page):
-        """Released immediately before callback 12, not on the 11th request."""
+        """Released immediately before the last read of the budget, not earlier."""
         await serve(
             dom_page,
             phased_sidebar([row("A", "late", dest="/messaging/thread/B/")]),
             start=COMPOSE_URL,
         )
-        await install_poll_control(dom_page, release=("A", 12), accelerate=True)
+        await install_poll_control(dom_page, release=("A", _row_route_polls()), accelerate=True)
 
         outcome = await scan(dom_page)
 
         assert attributed(outcome) == [("A", "B")]
         assert stop_of(outcome) is None
-        assert await poll_delays(dom_page) == [100] * 12
+        assert await poll_delays(dom_page) == [100] * _row_route_polls()
         assert await events(dom_page) == [
             {"click": "A", "pre": "/messaging/compose/"},
             {"dispatch": "A", "dest": "/messaging/thread/B/"},

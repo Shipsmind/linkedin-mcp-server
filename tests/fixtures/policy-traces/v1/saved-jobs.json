@@ -70,6 +70,15 @@
       "section": "saved_jobs"
     },
     {
+      "arg": null,
+      "call": "get_saved_jobs",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "section": "saved_jobs",
+      "timeout_ms": 30000
+    },
+    {
       "call": "get_saved_jobs",
       "kind": "boundary.rate_limit",
       "section": "saved_jobs"
@@ -215,6 +224,15 @@
       "event": "framenavigated",
       "kind": "listener.remove",
       "section": "saved_jobs"
+    },
+    {
+      "arg": null,
+      "call": "get_saved_jobs",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "section": "saved_jobs",
+      "timeout_ms": 30000
     },
     {
       "call": "get_saved_jobs",

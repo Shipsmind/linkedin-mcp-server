@@ -56,6 +56,14 @@
       "kind": "listener.remove"
     },
     {
+      "arg": null,
+      "call": "get_job_apply_url",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "timeout_ms": 30000
+    },
+    {
       "call": "get_job_apply_url",
       "kind": "boundary.rate_limit"
     },

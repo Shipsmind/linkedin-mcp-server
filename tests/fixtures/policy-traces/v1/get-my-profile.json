@@ -61,6 +61,15 @@
       "section": "main_profile"
     },
     {
+      "arg": null,
+      "call": "get_my_profile",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "section": "main_profile",
+      "timeout_ms": 30000
+    },
+    {
       "call": "get_my_profile",
       "kind": "boundary.rate_limit",
       "section": "main_profile"
@@ -72,7 +81,7 @@
       "section": "main_profile",
       "selector": "main",
       "state": "visible",
-      "timeout_ms": null
+      "timeout_ms": 30000
     },
     {
       "call": "get_my_profile",
@@ -99,6 +108,15 @@
       "operation": "root_content",
       "program_digest": "e6b2be4ebddd",
       "section": "main_profile"
+    },
+    {
+      "arg": null,
+      "call": "get_my_profile",
+      "kind": "wait_for_function",
+      "operation": "page_ready_profile",
+      "program_digest": "a2d049b6e838",
+      "section": "main_profile",
+      "timeout_ms": 30000
     },
     {
       "arg": null,

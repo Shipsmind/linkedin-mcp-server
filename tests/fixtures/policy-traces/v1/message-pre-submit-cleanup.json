@@ -64,6 +64,15 @@
       "section": "message"
     },
     {
+      "arg": null,
+      "call": "send_message",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "section": "message",
+      "timeout_ms": 30000
+    },
+    {
       "call": "send_message",
       "kind": "boundary.rate_limit",
       "section": "message"
@@ -148,6 +157,15 @@
       "event": "framenavigated",
       "kind": "listener.remove",
       "section": "message"
+    },
+    {
+      "arg": null,
+      "call": "send_message",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "section": "message",
+      "timeout_ms": 30000
     },
     {
       "call": "send_message",

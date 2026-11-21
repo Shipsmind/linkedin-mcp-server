@@ -56,6 +56,14 @@
       "kind": "listener.remove"
     },
     {
+      "arg": null,
+      "call": "search_companies",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "timeout_ms": 30000
+    },
+    {
       "call": "search_companies",
       "kind": "boundary.rate_limit"
     },
@@ -65,7 +73,7 @@
       "operation": "main",
       "selector": "main",
       "state": "visible",
-      "timeout_ms": null
+      "timeout_ms": 30000
     },
     {
       "call": "search_companies",
@@ -78,7 +86,7 @@
       "kind": "wait_for_function",
       "operation": "main_text_100",
       "program_digest": "5a4a89d4de2a",
-      "timeout_ms": 10000
+      "timeout_ms": 30000
     },
     {
       "actual_scrolls": 2,

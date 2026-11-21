@@ -1298,7 +1298,9 @@ async def _conversation_row_resolution_scenario() -> dict[str, Any]:
         page.declare_derived(f"row_link_{i}", "first", f"row_link_{i}.first")
         page.script(f"row_label_{i}.get_attribute", f"Select conversation with {name}")
         page.script(f"row_link_{i}.first.click", None)
-    page.script("evaluate:thread_id", None, *(["2-ada"] * 2), *(["2-ada"] * 12))
+    # Row 1 is polled for the whole route budget at the production control
+    # deadline (10 s / 100 ms = 100 reads) the trace scenarios pin.
+    page.script("evaluate:thread_id", None, *(["2-ada"] * 2), *(["2-ada"] * 100))
     extractor = _extractor(page)
     async with boundaries(recorder, clock):
         with recorder.context("get_inbox", "conversation"):

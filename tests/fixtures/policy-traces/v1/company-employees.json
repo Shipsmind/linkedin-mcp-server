@@ -57,6 +57,14 @@
       "kind": "listener.remove"
     },
     {
+      "arg": null,
+      "call": "get_company_employees",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "timeout_ms": 30000
+    },
+    {
       "call": "get_company_employees",
       "kind": "boundary.rate_limit"
     },
@@ -66,7 +74,7 @@
       "operation": "main",
       "selector": "main",
       "state": "visible",
-      "timeout_ms": null
+      "timeout_ms": 30000
     },
     {
       "call": "get_company_employees",
@@ -79,7 +87,7 @@
       "kind": "wait_for_function",
       "operation": "company_people_ready",
       "program_digest": "6615c14bd135",
-      "timeout_ms": 5000
+      "timeout_ms": 10000
     },
     {
       "actual_scrolls": 2,

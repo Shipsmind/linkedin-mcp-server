@@ -14,6 +14,8 @@ import re
 
 import pytest
 
+from linkedin_mcp_server.core.timeouts import content_ms, control_ms
+
 from linkedin_mcp_server.core.exceptions import AuthenticationError
 from linkedin_mcp_server.linkedin import capture as capture_module
 from linkedin_mcp_server.linkedin.capture import (
@@ -35,6 +37,17 @@ from linkedin_mcp_server.linkedin.text import (
     DetailCaptureTextTable,
     JobPostingTextTable,
 )
+
+
+@pytest.fixture(autouse=True)
+def _page_ready_is_immediate(monkeypatch):
+    """The navigator's page-ready wait (tested in test_event_driven_waits.py)
+    answers at once, so these cases count only the capture's own waits."""
+
+    async def ready(self, kind="main", timeout=None):
+        return True
+
+    monkeypatch.setattr(PageSession, "wait_page_ready", ready)
 
 
 def _capture(page) -> SectionCapture:
@@ -550,7 +563,7 @@ class TestActivityFeedExtraction:
             )
 
         mock_page.wait_for_function.assert_awaited_once_with(
-            JOB_POSTING_EN_US.readiness_expression(), timeout=10000
+            JOB_POSTING_EN_US.readiness_expression(), timeout=content_ms()
         )
         assert events == ["wait", "scroll"]
         _, kwargs = mock_scroll.call_args
@@ -997,7 +1010,7 @@ class TestCompanyPeopleExtraction:
         wait_kwargs = mock_page.wait_for_function.call_args.kwargs
         assert "/in/" in wait_predicate
         assert "querySelectorAll" in wait_predicate
-        assert wait_kwargs["timeout"] == 5000
+        assert wait_kwargs["timeout"] == control_ms()
         mock_scroll.assert_awaited_once()
 
     async def test_continues_extraction_on_wait_timeout(self, mock_page):
@@ -1546,7 +1559,7 @@ class TestExtractOverlay:
         assert result.text == "Email\nada@example.com"
         modal.assert_not_awaited()
         mock_page.wait_for_selector.assert_awaited_once_with(
-            "dialog[open], .artdeco-modal__content"
+            "dialog[open], .artdeco-modal__content", timeout=control_ms()
         )
         await_args = mock_page.evaluate.await_args
         assert await_args is not None

@@ -63,6 +63,15 @@
       "section": "sidebar"
     },
     {
+      "arg": null,
+      "call": "get_sidebar_profiles",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "section": "sidebar",
+      "timeout_ms": 30000
+    },
+    {
       "call": "get_sidebar_profiles",
       "kind": "boundary.rate_limit",
       "section": "sidebar"
@@ -74,7 +83,16 @@
       "section": "sidebar",
       "selector": "main",
       "state": "visible",
-      "timeout_ms": 5000
+      "timeout_ms": 30000
+    },
+    {
+      "arg": null,
+      "call": "get_sidebar_profiles",
+      "kind": "wait_for_function",
+      "operation": "page_ready_sidebar",
+      "program_digest": "00274d13f97f",
+      "section": "sidebar",
+      "timeout_ms": 10000
     },
     {
       "call": "get_sidebar_profiles",

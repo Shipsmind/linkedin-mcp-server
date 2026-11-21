@@ -18,6 +18,8 @@ import re
 
 import pytest
 
+from linkedin_mcp_server.core.timeouts import content_ms
+
 from linkedin_mcp_server.core.exceptions import (
     InvalidReferenceError,
     LinkedInOperationError,
@@ -305,7 +307,7 @@ class TestExtractConversationThreadRefs:
         await reader._extract_conversation_thread_refs(limit=None, context="inbox")
 
         mock_page.wait_for_selector.assert_awaited_once_with(
-            "main li label[aria-label]", state="attached", timeout=10000
+            "main li label[aria-label]", state="attached", timeout=content_ms()
         )
 
     async def test_the_requested_scrolls_run_after_the_wait_and_before_the_read(

@@ -76,6 +76,14 @@
       "kind": "listener.remove"
     },
     {
+      "arg": null,
+      "call": "read_person",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "timeout_ms": 30000
+    },
+    {
       "call": "read_person",
       "kind": "boundary.rate_limit"
     },
@@ -85,7 +93,7 @@
       "operation": "main",
       "selector": "main",
       "state": "visible",
-      "timeout_ms": null
+      "timeout_ms": 30000
     },
     {
       "call": "read_person",
@@ -109,6 +117,14 @@
       "kind": "evaluate",
       "operation": "root_content",
       "program_digest": "e6b2be4ebddd"
+    },
+    {
+      "arg": null,
+      "call": "read_person",
+      "kind": "wait_for_function",
+      "operation": "page_ready_profile",
+      "program_digest": "a2d049b6e838",
+      "timeout_ms": 30000
     },
     {
       "arg": null,
@@ -184,6 +200,14 @@
       "kind": "listener.remove"
     },
     {
+      "arg": null,
+      "call": "read_person",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "timeout_ms": 30000
+    },
+    {
       "call": "read_person",
       "kind": "boundary.rate_limit"
     },
@@ -193,7 +217,7 @@
       "operation": "main",
       "selector": "main",
       "state": "visible",
-      "timeout_ms": null
+      "timeout_ms": 30000
     },
     {
       "call": "read_person",
@@ -205,8 +229,8 @@
       "call": "read_person",
       "kind": "wait_for_function",
       "operation": "profile_details_ready",
-      "program_digest": "652e003606ba",
-      "timeout_ms": 10000
+      "program_digest": "3625b601d20b",
+      "timeout_ms": 30000
     },
     {
       "call": "read_person",
@@ -305,6 +329,14 @@
       "kind": "listener.remove"
     },
     {
+      "arg": null,
+      "call": "read_person",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "timeout_ms": 30000
+    },
+    {
       "call": "read_person",
       "kind": "boundary.rate_limit"
     },
@@ -314,7 +346,7 @@
       "operation": "main",
       "selector": "main",
       "state": "visible",
-      "timeout_ms": null
+      "timeout_ms": 30000
     },
     {
       "call": "read_person",
@@ -326,8 +358,8 @@
       "call": "read_person",
       "kind": "wait_for_function",
       "operation": "profile_details_ready",
-      "program_digest": "652e003606ba",
-      "timeout_ms": 10000
+      "program_digest": "3625b601d20b",
+      "timeout_ms": 30000
     },
     {
       "call": "read_person",
@@ -426,6 +458,14 @@
       "kind": "listener.remove"
     },
     {
+      "arg": null,
+      "call": "read_person",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "timeout_ms": 30000
+    },
+    {
       "call": "read_person",
       "kind": "boundary.rate_limit"
     },
@@ -435,7 +475,7 @@
       "operation": "main",
       "selector": "main",
       "state": "visible",
-      "timeout_ms": null
+      "timeout_ms": 30000
     },
     {
       "call": "read_person",
@@ -447,8 +487,8 @@
       "call": "read_person",
       "kind": "wait_for_function",
       "operation": "profile_details_ready",
-      "program_digest": "652e003606ba",
-      "timeout_ms": 10000
+      "program_digest": "3625b601d20b",
+      "timeout_ms": 30000
     },
     {
       "call": "read_person",
@@ -547,6 +587,14 @@
       "kind": "listener.remove"
     },
     {
+      "arg": null,
+      "call": "read_person",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "timeout_ms": 30000
+    },
+    {
       "call": "read_person",
       "kind": "boundary.rate_limit"
     },
@@ -556,7 +604,7 @@
       "operation": "main",
       "selector": "main",
       "state": "visible",
-      "timeout_ms": null
+      "timeout_ms": 30000
     },
     {
       "call": "read_person",
@@ -568,8 +616,8 @@
       "call": "read_person",
       "kind": "wait_for_function",
       "operation": "profile_details_ready",
-      "program_digest": "652e003606ba",
-      "timeout_ms": 10000
+      "program_digest": "3625b601d20b",
+      "timeout_ms": 30000
     },
     {
       "call": "read_person",
@@ -668,6 +716,14 @@
       "kind": "listener.remove"
     },
     {
+      "arg": null,
+      "call": "read_person",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "timeout_ms": 30000
+    },
+    {
       "call": "read_person",
       "kind": "boundary.rate_limit"
     },
@@ -677,7 +733,7 @@
       "operation": "main",
       "selector": "main",
       "state": "visible",
-      "timeout_ms": null
+      "timeout_ms": 30000
     },
     {
       "call": "read_person",
@@ -689,8 +745,8 @@
       "call": "read_person",
       "kind": "wait_for_function",
       "operation": "profile_details_ready",
-      "program_digest": "652e003606ba",
-      "timeout_ms": 10000
+      "program_digest": "3625b601d20b",
+      "timeout_ms": 30000
     },
     {
       "call": "read_person",
@@ -789,6 +845,14 @@
       "kind": "listener.remove"
     },
     {
+      "arg": null,
+      "call": "read_person",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "timeout_ms": 30000
+    },
+    {
       "call": "read_person",
       "kind": "boundary.rate_limit"
     },
@@ -798,7 +862,7 @@
       "operation": "main",
       "selector": "main",
       "state": "visible",
-      "timeout_ms": null
+      "timeout_ms": 30000
     },
     {
       "call": "read_person",
@@ -810,8 +874,8 @@
       "call": "read_person",
       "kind": "wait_for_function",
       "operation": "profile_details_ready",
-      "program_digest": "652e003606ba",
-      "timeout_ms": 10000
+      "program_digest": "3625b601d20b",
+      "timeout_ms": 30000
     },
     {
       "call": "read_person",
@@ -910,6 +974,14 @@
       "kind": "listener.remove"
     },
     {
+      "arg": null,
+      "call": "read_person",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "timeout_ms": 30000
+    },
+    {
       "call": "read_person",
       "kind": "boundary.rate_limit"
     },
@@ -919,7 +991,7 @@
       "operation": "main",
       "selector": "main",
       "state": "visible",
-      "timeout_ms": null
+      "timeout_ms": 30000
     },
     {
       "call": "read_person",
@@ -931,8 +1003,8 @@
       "call": "read_person",
       "kind": "wait_for_function",
       "operation": "profile_details_ready",
-      "program_digest": "652e003606ba",
-      "timeout_ms": 10000
+      "program_digest": "3625b601d20b",
+      "timeout_ms": 30000
     },
     {
       "call": "read_person",
@@ -1031,6 +1103,14 @@
       "kind": "listener.remove"
     },
     {
+      "arg": null,
+      "call": "read_person",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "timeout_ms": 30000
+    },
+    {
       "call": "read_person",
       "kind": "boundary.rate_limit"
     },
@@ -1040,7 +1120,7 @@
       "operation": "main",
       "selector": "main",
       "state": "visible",
-      "timeout_ms": null
+      "timeout_ms": 30000
     },
     {
       "call": "read_person",
@@ -1052,8 +1132,8 @@
       "call": "read_person",
       "kind": "wait_for_function",
       "operation": "profile_details_ready",
-      "program_digest": "652e003606ba",
-      "timeout_ms": 10000
+      "program_digest": "3625b601d20b",
+      "timeout_ms": 30000
     },
     {
       "call": "read_person",
@@ -1152,6 +1232,14 @@
       "kind": "listener.remove"
     },
     {
+      "arg": null,
+      "call": "read_person",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "timeout_ms": 30000
+    },
+    {
       "call": "read_person",
       "kind": "boundary.rate_limit"
     },
@@ -1161,7 +1249,7 @@
       "operation": "main",
       "selector": "main",
       "state": "visible",
-      "timeout_ms": null
+      "timeout_ms": 30000
     },
     {
       "call": "read_person",
@@ -1173,8 +1261,8 @@
       "call": "read_person",
       "kind": "wait_for_function",
       "operation": "profile_details_ready",
-      "program_digest": "652e003606ba",
-      "timeout_ms": 10000
+      "program_digest": "3625b601d20b",
+      "timeout_ms": 30000
     },
     {
       "call": "read_person",
@@ -1273,6 +1361,14 @@
       "kind": "listener.remove"
     },
     {
+      "arg": null,
+      "call": "read_person",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "timeout_ms": 30000
+    },
+    {
       "call": "read_person",
       "kind": "boundary.rate_limit"
     },
@@ -1282,7 +1378,7 @@
       "operation": "dialog",
       "selector": "dialog[open], .artdeco-modal__content",
       "state": "visible",
-      "timeout_ms": null
+      "timeout_ms": 10000
     },
     {
       "arg": {
@@ -1356,6 +1452,14 @@
       "kind": "listener.remove"
     },
     {
+      "arg": null,
+      "call": "read_person",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "timeout_ms": 30000
+    },
+    {
       "call": "read_person",
       "kind": "boundary.rate_limit"
     },
@@ -1365,7 +1469,7 @@
       "operation": "main",
       "selector": "main",
       "state": "visible",
-      "timeout_ms": null
+      "timeout_ms": 30000
     },
     {
       "call": "read_person",
@@ -1378,7 +1482,7 @@
       "kind": "wait_for_function",
       "operation": "main_text_200",
       "program_digest": "24943facf9de",
-      "timeout_ms": 10000
+      "timeout_ms": 30000
     },
     {
       "actual_scrolls": 2,

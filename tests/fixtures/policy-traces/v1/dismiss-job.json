@@ -56,6 +56,14 @@
       "kind": "listener.remove"
     },
     {
+      "arg": null,
+      "call": "dismiss_job",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "timeout_ms": 30000
+    },
+    {
       "call": "dismiss_job",
       "kind": "boundary.rate_limit"
     },
@@ -125,6 +133,14 @@
       "callback_id": "callback-2",
       "event": "framenavigated",
       "kind": "listener.remove"
+    },
+    {
+      "arg": null,
+      "call": "dismiss_job",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "timeout_ms": 30000
     },
     {
       "call": "dismiss_job",
@@ -234,6 +250,14 @@
       "callback_id": "callback-3",
       "event": "framenavigated",
       "kind": "listener.remove"
+    },
+    {
+      "arg": null,
+      "call": "dismiss_job",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "timeout_ms": 30000
     },
     {
       "call": "dismiss_job",

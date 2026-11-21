@@ -70,6 +70,15 @@
       "section": "feed"
     },
     {
+      "arg": null,
+      "call": "extract_feed",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "section": "feed",
+      "timeout_ms": 30000
+    },
+    {
       "call": "extract_feed",
       "kind": "boundary.rate_limit",
       "section": "feed"
@@ -81,7 +90,7 @@
       "section": "feed",
       "selector": "main",
       "state": "visible",
-      "timeout_ms": null
+      "timeout_ms": 30000
     },
     {
       "call": "extract_feed",
@@ -96,7 +105,7 @@
       "operation": "main_text_200",
       "program_digest": "24943facf9de",
       "section": "feed",
-      "timeout_ms": 10000
+      "timeout_ms": 30000
     },
     {
       "call": "extract_feed",
@@ -269,13 +278,6 @@
       "kind": "sleep",
       "reason": "sleep",
       "seconds": 1.0,
-      "section": "feed"
-    },
-    {
-      "call": "extract_feed",
-      "kind": "sleep",
-      "reason": "sleep",
-      "seconds": 0.2,
       "section": "feed"
     },
     {
