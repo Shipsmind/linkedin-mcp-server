@@ -159,9 +159,7 @@
     },
     {
       "call": "archive_conversation",
-      "kind": "sleep",
-      "reason": "sleep",
-      "seconds": 2.0
+      "kind": "boundary.action_pause"
     },
     {
       "call": "archive_conversation",

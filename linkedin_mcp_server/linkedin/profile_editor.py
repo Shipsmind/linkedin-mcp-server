@@ -19,7 +19,8 @@ from patchright.async_api import Locator, Page
 
 import linkedin_mcp_server.linkedin.profile_selectors as sel
 from linkedin_mcp_server.linkedin.navigation import PageNavigator
-from linkedin_mcp_server.linkedin.session import NAV_DELAY, PageSession
+from linkedin_mcp_server.core import human_input
+from linkedin_mcp_server.linkedin.session import PageSession
 from linkedin_mcp_server.profile_edit.changeset import skill_key
 from linkedin_mcp_server.profile_edit.errors import (
     ProfileEditError,
@@ -70,11 +71,13 @@ class ProfileEditor:
 
     # ── navigation ──────────────────────────────────────────────────────────
     async def pause(self, seconds: float) -> None:
-        await self._session.delay(seconds)
+        # A person's random 2-20 s pause, never the fixed figure asked for.
+        del seconds
+        await self._session.action_pause()
 
     async def _goto(self, url: str) -> None:
         if self._navigations:
-            await self._session.delay(NAV_DELAY)
+            await self._session.page_load_pause()
         self._navigations += 1
         await self._navigator._navigate_to_page(url)
         await self._session.check_rate_limit()
@@ -196,25 +199,25 @@ class ProfileEditor:
         return None
 
     async def _type(self, loc: Locator, value: str) -> None:
+        page = self._page
         if await self._is_plain(loc):
-            await loc.fill(value)
+            await human_input.clear_and_type(page, loc, value)
             return
-        # A rich-text box: replace its content. LinkedIn separates paragraphs
-        # with an empty paragraph, so a blank line is typed as two Enters; a
-        # single line break is Shift+Enter.
-        keyboard = self._page.keyboard
-        await loc.click()
-        await keyboard.press("ControlOrMeta+A")
-        await keyboard.press("Delete")
+        # A rich-text box: replace its content, typed one key at a time.
+        # LinkedIn separates paragraphs with an empty paragraph, so a blank
+        # line is two Enters; a single line break is Shift+Enter.
+        await human_input.move_and_click(page, loc)
+        await human_input.press_key(page, "ControlOrMeta+A")
+        await human_input.press_key(page, "Delete")
         for i, paragraph in enumerate(value.split("\n\n")):
             if i:
-                await keyboard.press("Enter")
-                await keyboard.press("Enter")
+                await human_input.press_key(page, "Enter")
+                await human_input.press_key(page, "Enter")
             for j, line in enumerate(paragraph.split("\n")):
                 if j:
-                    await keyboard.press("Shift+Enter")
+                    await human_input.press_key(page, "Shift+Enter")
                 if line:
-                    await keyboard.insert_text(line)
+                    await human_input.type_text(page, line)
 
     async def _refuse_if_notifying(self, field: str) -> None:
         """Never let an approved edit also broadcast an update to the network."""
@@ -276,7 +279,7 @@ class ProfileEditor:
             raise await self._not_found(
                 f"{field} save button", url, "no unique save control"
             )
-        await save.click()
+        await human_input.move_and_click(self._page, save)
         try:
             await self._dialog().wait_for(state="hidden", timeout=_SAVE_TIMEOUT_MS)
         except Exception:
@@ -395,7 +398,10 @@ class ProfileEditor:
                 await self._page.evaluate(
                     sel.SCROLL_LAST_ITEM_JS, sel.SKILL_EDIT_HREF.pattern
                 )
+                # The next batch loads after the scroll (a page wait, not
+                # pacing), then a person's random pause.
                 await self._page.wait_for_timeout(_SCROLL_SETTLE_MS)
+                await self._session.action_pause()
             else:
                 # Every scroll up to the cap still brought new skills, so the
                 # view may hold more. A partial list must never be used to
@@ -412,8 +418,11 @@ class ProfileEditor:
             button = filters.nth(i)
             if await button.get_attribute("aria-current") == "true":
                 continue
-            await button.click()
+            await human_input.move_and_click(self._page, button)
+            # The view loads after the click (a page wait, not pacing), then a
+            # person's random pause before the next action.
             await self._page.wait_for_timeout(_VIEW_SETTLE_MS)
+            await self._session.action_pause()
             await collect()
         return [
             Skill(name=name, position=n + 1, ref=ref)
@@ -457,7 +466,7 @@ class ProfileEditor:
         # list re-rendered ("Large LanguagModels"). Set all but the last
         # character at once, type the last to trigger suggestions, and only
         # continue when the box holds exactly the intended name.
-        await box.fill(name[:-1])
+        await human_input.clear_and_type(self._page, box, name[:-1])
         await box.press_sequentially(name[-1], delay=120)
         if await box.input_value() != name:
             raise ProfileEditError(
@@ -480,7 +489,7 @@ class ProfileEditor:
             text = normalize_text((await options.nth(i).inner_text()).split("\n")[0])
             offered.append(text)
             if skill_key(text) == skill_key(name):
-                await options.nth(i).click()
+                await human_input.move_and_click(self._page, options.nth(i))
                 await self._refuse_if_notifying("skill")
                 await self._save("skill", url)
                 return text
@@ -517,13 +526,13 @@ class ProfileEditor:
             raise await self._not_found(
                 "delete skill button", url, "no unique delete control"
             )
-        await delete.click()
+        await human_input.move_and_click(self._page, delete)
         confirm = await self._button("confirm_delete", self._page.locator(sel.DIALOG))
         if confirm is None:
             raise await self._not_found(
                 "delete confirmation", url, "no unique confirm control"
             )
-        await confirm.click()
+        await human_input.move_and_click(self._page, confirm)
         try:
             await self._dialog().wait_for(state="hidden", timeout=_SAVE_TIMEOUT_MS)
         except Exception:

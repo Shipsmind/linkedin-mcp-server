@@ -34,7 +34,8 @@ from linkedin_mcp_server.linkedin.link_metadata import (
 )
 from linkedin_mcp_server.linkedin.navigation import PageNavigator
 from linkedin_mcp_server.linkedin.profile_page import ProfilePageReader
-from linkedin_mcp_server.linkedin.session import NAV_DELAY, PageSession
+from linkedin_mcp_server.core import human_input
+from linkedin_mcp_server.linkedin.session import PageSession
 from linkedin_mcp_server.linkedin.text import (
     CONVERSATION_ACTIONS_EN_US,
     ConversationActionTextTable,
@@ -85,6 +86,50 @@ class _StoppedRow:
 
     aria_label: str
     position: int
+
+
+# The thread id in the address, and nothing else: a query, hash or trailing
+# slash on the same thread is not a move, and "new" is not a thread.
+_THREAD_ID_JS = r"""() => {
+    const match = location.pathname.match(/^\/messaging\/thread\/([^/]+)\/?$/);
+    if (!match) return null;
+    try {
+        return decodeURIComponent(match[1]) === 'new' ? null : match[1];
+    } catch {
+        return null;
+    }
+}"""
+
+# Read-only listing of the conversation rows to open. A row is listed when it
+# matches the optional participant filter (normalised by whitespace and case);
+# ``clickable`` says whether it has the Ember click target. Clicking marks a
+# row read, so rows that do not match the filter are never listed.
+_ROW_LISTING_JS = r"""({ limit, nameFilter }) => {
+    const labels = Array.from(document.querySelectorAll('main li label[aria-label]'));
+    const cap = (limit == null) ? labels.length : Math.min(labels.length, limit);
+    const wanted = (nameFilter || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const match = location.pathname.match(/^\/messaging\/thread\/([^/]+)\/?$/);
+    let startThreadId = null;
+    if (match) {
+        try {
+            startThreadId = decodeURIComponent(match[1]) === 'new' ? null : match[1];
+        } catch {
+            startThreadId = null;
+        }
+    }
+    const rows = [];
+    for (let position = 0; position < cap; position++) {
+        const label = labels[position];
+        const ariaLabel = label.getAttribute('aria-label') || '';
+        const rowName = ariaLabel
+            .replace(/^Select conversation with\s+/i, '')
+            .replace(/\s+/g, ' ').trim().toLowerCase();
+        if (wanted && rowName !== wanted) continue;
+        const clickable = !!label.closest('li')?.querySelector('div[class*="listitem__link"]');
+        rows.push({ ariaLabel, position, clickable, filtered: !!wanted });
+    }
+    return { rows, startThreadId };
+}"""
 
 
 @dataclass(frozen=True)
@@ -401,6 +446,11 @@ _THREAD_SEEN_MARK = "data-mcp-thread-seen"
 _THREAD_READY_TIMEOUT = 10.0
 _THREAD_MENU_TIMEOUT = 5.0
 _THREAD_POLL = 0.25
+# Twelve route reads 100 ms apart after a row click: the same 1.2 s budget the
+# in-page row loop had before rows were opened from Python.
+_ROW_ROUTE_POLL = 0.1
+# Wheel bursts one region-scroll attempt may take to reach the edge.
+_REGION_MAX_BURSTS = 12
 
 # The folder a thread is in is read from LinkedIn's own messaging data, never
 # from its menu: measured on 2026-10-15, an archived thread opened by its URL
@@ -679,31 +729,55 @@ class ConversationReader:
         attempts: int,
         pause_time: float = 0.5,
     ) -> None:
-        """Scroll the largest scrollable region inside main when one exists."""
+        """Scroll the largest scrollable region inside main when one exists.
+
+        Shipsmind fork: the page script only MEASURES the region (read-only);
+        the scroll itself is the mouse wheel over that region, in bursts with
+        a person's random pauses. ``pause_time`` is no longer used.
+        """
+        del pause_time
+        edge = "atTop" if position == "top" else "atBottom"
         for _ in range(attempts):
-            await self._session.run_on_linkedin(
-                """({ position }) => {
-                    const main = document.querySelector('main');
-                    if (!main) return false;
+            # One attempt wheels until the region reaches its edge (bounded),
+            # the way a person keeps scrolling to the start of a thread.
+            for _burst in range(_REGION_MAX_BURSTS):
+                box = await self._session.run_on_linkedin(
+                    """() => {
+                        const main = document.querySelector('main');
+                        if (!main) return null;
 
-                    const isScrollable = element => {
-                        const style = window.getComputedStyle(element);
-                        return (
-                            (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
-                            element.scrollHeight > element.clientHeight + 20
-                        );
-                    };
+                        const isScrollable = element => {
+                            const style = window.getComputedStyle(element);
+                            return (
+                                (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+                                element.scrollHeight > element.clientHeight + 20
+                            );
+                        };
 
-                    const candidates = [main, ...main.querySelectorAll('*')].filter(isScrollable);
-                    const target = candidates.sort(
-                        (left, right) => right.scrollHeight - left.scrollHeight
-                    )[0] || main;
-                    target.scrollTop = position === 'top' ? 0 : target.scrollHeight;
-                    return true;
-                }""",
-                {"position": position},
-            )
-            await self._session.delay(pause_time)
+                        const candidates = [main, ...main.querySelectorAll('*')].filter(isScrollable);
+                        const target = candidates.sort(
+                            (left, right) => right.scrollHeight - left.scrollHeight
+                        )[0] || main;
+                        const r = target.getBoundingClientRect();
+                        return {
+                            x: r.x, y: r.y, width: r.width, height: r.height,
+                            atTop: target.scrollTop <= 0,
+                            atBottom: target.scrollTop + target.clientHeight
+                                >= target.scrollHeight - 2,
+                        };
+                    }""",
+                )
+                if (
+                    not isinstance(box, dict)
+                    or not box.get("width")
+                    or not box.get("height")
+                ):
+                    return
+                if box.get(edge):
+                    break
+                await human_input.wheel_over(
+                    self._session.page, box, direction=-1 if position == "top" else 1
+                )
 
     async def _extract_conversation_thread_refs(
         self,
@@ -780,93 +854,15 @@ class ConversationReader:
         # clickable element, so class-name selectors are unavoidable here.
         # The aria-label value flows through unmodified — Python strips any
         # known locale prefix to derive a clean participant name for refs.
-        outcome: dict[str, Any] = await self._session.run_on_linkedin(
-            """async ({ limit, nameFilter }) => {
-                const labels = Array.from(document.querySelectorAll(
-                    'main li label[aria-label]'
-                ));
-                const cap = (limit == null)
-                    ? labels.length
-                    : Math.min(labels.length, limit);
-                // Normalize the optional participant filter by whitespace and
-                // case only. The en-US verb is stripped from row labels below,
-                // never from the filter, which is a display name. Only a
-                // matching row is clicked; clicking marks a row read, so
-                // unrelated threads must not be clicked.
-                const wanted = (nameFilter || '')
-                    .replace(/\\s+/g, ' ').trim().toLowerCase();
-                // Thread identity is the pathname's thread id and nothing
-                // else: a query, hash or trailing-slash change on the same
-                // thread is not a move, and a thread marker in a query is not
-                // a thread.
-                const idOf = () => {
-                    const match = location.pathname.match(
-                        /^\\/messaging\\/thread\\/([^/]+)\\/?$/
-                    );
-                    if (!match) return null;
-                    try {
-                        return decodeURIComponent(match[1]) === 'new' ? null : match[1];
-                    } catch {
-                        return null;
-                    }
-                };
-                const outcome = {
-                    rows: [],
-                    stoppedAt: null,
-                    firstIndexGap: null,
-                    startThreadId: idOf(),
-                };
-                for (let position = 0; position < cap; position++) {
-                    const label = labels[position];
-                    const ariaLabel = label.getAttribute('aria-label') || '';
-                    const rowName = ariaLabel
-                        .replace(/^Select conversation with\\s+/i, '')
-                        .replace(/\\s+/g, ' ').trim().toLowerCase();
-                    if (wanted && rowName !== wanted) continue;
-                    const clickTarget = label.closest('li')
-                        ?.querySelector('div[class*="listitem__link"]');
-                    if (!clickTarget) {
-                        // Skipped, not clicked. A listing loses only this
-                        // row; a username index cannot count past it.
-                        if (wanted && outcome.firstIndexGap === null) {
-                            outcome.firstIndexGap = {
-                                ariaLabel,
-                                position,
-                                precededBy: outcome.rows.length,
-                            };
-                        }
-                        continue;
-                    }
-                    // Read fresh for every row: after an earlier row moved the
-                    // page, the thread that was open at scan start is a real
-                    // destination for its own row.
-                    const before = idOf();
-                    clickTarget.click();
-                    // Poll for the SPA URL to settle on a different thread.
-                    // The Ember click handler can take a moment to bind after
-                    // the label mounts, and a fixed sleep races the click.
-                    let after = null;
-                    for (let waits = 0; waits < 12; waits++) {
-                        await new Promise(r => setTimeout(r, 100));
-                        const now = idOf();
-                        if (now !== null && now !== before) {
-                            after = now;
-                            break;
-                        }
-                    }
-                    // Stop, never continue: this click may still land, and a
-                    // later row polled meanwhile would be handed its thread.
-                    // Nor is the pre-click id credited to this row.
-                    if (after === null) {
-                        outcome.stoppedAt = { ariaLabel, position };
-                        break;
-                    }
-                    outcome.rows.push({ ariaLabel, threadId: after });
-                }
-                return outcome;
-            }""",
+        # Shipsmind fork: the page script only LISTS the rows (read-only). Each
+        # row is then opened from Python with real mouse input and a person's
+        # random pause between rows, instead of a JavaScript loop clicking
+        # every row in a burst.
+        listing: dict[str, Any] = await self._session.run_on_linkedin(
+            _ROW_LISTING_JS,
             {"limit": limit, "nameFilter": name_filter},
         )
+        outcome: dict[str, Any] = await self._open_rows_humanly(listing)
         refs: list[Reference] = []
         for conv in outcome["rows"]:
             ref: Reference = {
@@ -894,6 +890,62 @@ class ConversationReader:
             ),
             start_thread_id=outcome["startThreadId"],
         )
+
+    async def _open_rows_humanly(self, listing: dict[str, Any]) -> dict[str, Any]:
+        """Open each listed row like a person and record the thread it opens.
+
+        Same result shape the old in-page loop returned: ``rows``,
+        ``stoppedAt``, ``firstIndexGap`` and ``startThreadId``. A row whose
+        click does not move the page to a different thread stops the scan, and
+        no later row is clicked.
+        """
+        page = self._session.page
+        outcome: dict[str, Any] = {
+            "rows": [],
+            "stoppedAt": None,
+            "firstIndexGap": None,
+            "startThreadId": (listing or {}).get("startThreadId"),
+        }
+        for row in (listing or {}).get("rows") or []:
+            aria_label = str(row.get("ariaLabel") or "")
+            position = int(row.get("position") or 0)
+            if not row.get("clickable"):
+                if row.get("filtered") and outcome["firstIndexGap"] is None:
+                    outcome["firstIndexGap"] = {
+                        "ariaLabel": aria_label,
+                        "position": position,
+                        "precededBy": len(outcome["rows"]),
+                    }
+                continue
+            if outcome["rows"]:
+                # A person reads one conversation before opening the next.
+                await self._session.action_pause()
+            label = page.locator("main li label[aria-label]").nth(position)
+            # The list can re-render between rows; never click a row that is
+            # no longer the one listed.
+            if await label.get_attribute("aria-label") != aria_label:
+                outcome["stoppedAt"] = {"ariaLabel": aria_label, "position": position}
+                break
+            target = (
+                label.locator("xpath=ancestor::li[1]")
+                .locator('div[class*="listitem__link"]')
+                .first
+            )
+            before = await self._session.run_on_linkedin(_THREAD_ID_JS)
+            await human_input.move_and_click(page, target)
+            after = None
+            for _ in range(12):
+                # Polling the page for the SPA route, not human pacing.
+                await self._session.delay(_ROW_ROUTE_POLL)
+                now = await self._session.run_on_linkedin(_THREAD_ID_JS)
+                if now is not None and now != before:
+                    after = now
+                    break
+            if after is None:
+                outcome["stoppedAt"] = {"ariaLabel": aria_label, "position": position}
+                break
+            outcome["rows"].append({"ariaLabel": aria_label, "threadId": after})
+        return outcome
 
     async def _resolve_conversation_thread_urls(
         self, display_name: str
@@ -1220,7 +1272,7 @@ class ConversationReader:
             await self._session.page.locator(f"[{_THREAD_ARCHIVE_MARK}]").click(
                 timeout=5000
             )
-            await self._session.delay(NAV_DELAY)
+            await self._session.action_pause()
             after = await self._read_thread_folder(url, thread_key)
             if _folder_of(after) != "archived":
                 raise LinkedInOperationError(

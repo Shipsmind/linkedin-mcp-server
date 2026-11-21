@@ -132,9 +132,7 @@
     },
     {
       "call": "read_person",
-      "kind": "sleep",
-      "reason": "sleep",
-      "seconds": 2.0
+      "kind": "boundary.page_load_pause"
     },
     {
       "call": "read_person",
@@ -255,9 +253,7 @@
     },
     {
       "call": "read_person",
-      "kind": "sleep",
-      "reason": "sleep",
-      "seconds": 2.0
+      "kind": "boundary.page_load_pause"
     },
     {
       "call": "read_person",
@@ -378,9 +374,7 @@
     },
     {
       "call": "read_person",
-      "kind": "sleep",
-      "reason": "sleep",
-      "seconds": 2.0
+      "kind": "boundary.page_load_pause"
     },
     {
       "call": "read_person",
@@ -501,9 +495,7 @@
     },
     {
       "call": "read_person",
-      "kind": "sleep",
-      "reason": "sleep",
-      "seconds": 2.0
+      "kind": "boundary.page_load_pause"
     },
     {
       "call": "read_person",
@@ -624,9 +616,7 @@
     },
     {
       "call": "read_person",
-      "kind": "sleep",
-      "reason": "sleep",
-      "seconds": 2.0
+      "kind": "boundary.page_load_pause"
     },
     {
       "call": "read_person",
@@ -747,9 +737,7 @@
     },
     {
       "call": "read_person",
-      "kind": "sleep",
-      "reason": "sleep",
-      "seconds": 2.0
+      "kind": "boundary.page_load_pause"
     },
     {
       "call": "read_person",
@@ -870,9 +858,7 @@
     },
     {
       "call": "read_person",
-      "kind": "sleep",
-      "reason": "sleep",
-      "seconds": 2.0
+      "kind": "boundary.page_load_pause"
     },
     {
       "call": "read_person",
@@ -993,9 +979,7 @@
     },
     {
       "call": "read_person",
-      "kind": "sleep",
-      "reason": "sleep",
-      "seconds": 2.0
+      "kind": "boundary.page_load_pause"
     },
     {
       "call": "read_person",
@@ -1116,9 +1100,7 @@
     },
     {
       "call": "read_person",
-      "kind": "sleep",
-      "reason": "sleep",
-      "seconds": 2.0
+      "kind": "boundary.page_load_pause"
     },
     {
       "call": "read_person",
@@ -1239,9 +1221,7 @@
     },
     {
       "call": "read_person",
-      "kind": "sleep",
-      "reason": "sleep",
-      "seconds": 2.0
+      "kind": "boundary.page_load_pause"
     },
     {
       "call": "read_person",
@@ -1324,9 +1304,7 @@
     },
     {
       "call": "read_person",
-      "kind": "sleep",
-      "reason": "sleep",
-      "seconds": 2.0
+      "kind": "boundary.page_load_pause"
     },
     {
       "call": "read_person",

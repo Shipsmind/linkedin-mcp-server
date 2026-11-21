@@ -564,10 +564,18 @@ class TestReadPersonPacing:
         async def delay(seconds):
             events.append(("delay", seconds))
 
+        async def page_load_pause():
+            events.append(("pause", "page_load"))
+
+        async def action_pause():
+            events.append(("pause", "action"))
+
         with (
             patch.object(reader._capture, "capture", side_effect=capture),
             patch.object(reader._capture, "_extract_overlay", side_effect=overlay),
             patch.object(PageSession, "delay", side_effect=delay),
+            patch.object(PageSession, "page_load_pause", side_effect=page_load_pause),
+            patch.object(PageSession, "action_pause", side_effect=action_pause),
         ):
             await reader.read_person(
                 "testuser", {"main_profile", "experience", "contact_info"}
@@ -575,9 +583,9 @@ class TestReadPersonPacing:
 
         assert events == [
             ("capture", "main_profile"),
-            ("delay", 2.0),
+            ("pause", "page_load"),
             ("capture", "experience"),
-            ("delay", 2.0),
+            ("pause", "page_load"),
             ("capture", "contact_info"),
         ]
 
@@ -597,9 +605,17 @@ class TestReadPersonPacing:
         async def delay(seconds):
             events.append(("delay", seconds))
 
+        async def page_load_pause():
+            events.append(("pause", "page_load"))
+
+        async def action_pause():
+            events.append(("pause", "action"))
+
         with (
             patch.object(reader._capture, "capture", side_effect=capture),
             patch.object(PageSession, "delay", side_effect=delay),
+            patch.object(PageSession, "page_load_pause", side_effect=page_load_pause),
+            patch.object(PageSession, "action_pause", side_effect=action_pause),
         ):
             await reader.read_person("testuser", requested)
 
@@ -618,9 +634,17 @@ class TestReadPersonPacing:
         async def delay(seconds):
             events.append(("delay", seconds))
 
+        async def page_load_pause():
+            events.append(("pause", "page_load"))
+
+        async def action_pause():
+            events.append(("pause", "action"))
+
         with (
             patch.object(reader._capture, "capture", side_effect=capture),
             patch.object(PageSession, "delay", side_effect=delay),
+            patch.object(PageSession, "page_load_pause", side_effect=page_load_pause),
+            patch.object(PageSession, "action_pause", side_effect=action_pause),
         ):
             result = await reader.read_person(
                 "testuser", {"main_profile", "experience", "posts"}
@@ -628,7 +652,7 @@ class TestReadPersonPacing:
 
         assert events == [
             ("capture", "main_profile"),
-            ("delay", 2.0),
+            ("pause", "page_load"),
             ("capture", "experience"),
         ]
         assert result["sections"] == {"main_profile": "main_profile text"}
@@ -652,10 +676,18 @@ class TestReadPersonPacing:
         async def delay(seconds):
             events.append(("delay", seconds))
 
+        async def page_load_pause():
+            events.append(("pause", "page_load"))
+
+        async def action_pause():
+            events.append(("pause", "action"))
+
         with (
             patch.object(reader._capture, "_extract_loaded_section", side_effect=reuse),
             patch.object(reader._capture, "capture", side_effect=capture),
             patch.object(PageSession, "delay", side_effect=delay),
+            patch.object(PageSession, "page_load_pause", side_effect=page_load_pause),
+            patch.object(PageSession, "action_pause", side_effect=action_pause),
             patch.object(
                 reader._navigator, "_navigate_to_page", new_callable=AsyncMock
             ) as navigate,
@@ -668,7 +700,7 @@ class TestReadPersonPacing:
 
         assert events == [
             ("reuse", "main_profile"),
-            ("delay", 2.0),
+            ("pause", "page_load"),
             ("capture", "experience"),
         ]
         navigate.assert_not_awaited()
@@ -950,11 +982,19 @@ class TestMissingContactOverlay:
         async def delay(seconds: float) -> None:
             events.append(("delay", seconds))
 
+        async def page_load_pause() -> None:
+            events.append(("pause", "page_load"))
+
+        async def action_pause() -> None:
+            events.append(("pause", "action"))
+
         mock_page.evaluate = AsyncMock(side_effect=evaluate)
         diagnostic_failure = PermissionError("diagnostic directory is unwritable")
         boundaries = (
             patch.object(reader._navigator, "_navigate_to_page", side_effect=navigate),
             patch.object(PageSession, "delay", side_effect=delay),
+            patch.object(PageSession, "page_load_pause", side_effect=page_load_pause),
+            patch.object(PageSession, "action_pause", side_effect=action_pause),
             patch(
                 "linkedin_mcp_server.linkedin.session.detect_rate_limit",
                 new_callable=AsyncMock,
@@ -1018,9 +1058,9 @@ class TestMissingContactOverlay:
 
         assert events == [
             ("goto", f"{base}/"),
-            ("delay", 2.0),
+            ("pause", "page_load"),
             ("goto", overlay),
-            ("delay", 2.0),
+            ("pause", "page_load"),
             ("goto", posts),
         ]
         assert result["sections"] == {
@@ -1052,9 +1092,9 @@ class TestMissingContactOverlay:
 
         assert events == [
             ("goto", f"{base}/"),
-            ("delay", 2.0),
+            ("pause", "page_load"),
             ("goto", overlay),
-            ("delay", 5.0),
+            ("pause", "page_load"),
             ("goto", overlay),
         ]
         assert result["sections"] == {"main_profile": PROFILE_TEXT}
@@ -1079,7 +1119,7 @@ class TestMissingContactOverlay:
         with self.browser(reader, mock_page, pages, events, redirects={me: profile}):
             result = await reader.get_my_profile(sections={"contact_info"})
 
-        assert events == [("goto", me), ("delay", 2.0), ("goto", overlay)]
+        assert events == [("goto", me), ("pause", "page_load"), ("goto", overlay)]
         assert result["url"] == profile
         assert result["sections"] == {"main_profile": PROFILE_TEXT}
         assert result["section_errors"] == {"contact_info": _missing_root(overlay)}
@@ -1458,10 +1498,18 @@ class TestGetSidebarProfiles:
         async def delay(seconds):
             events.append(("delay", seconds))
 
+        async def page_load_pause():
+            events.append(("pause", "page_load"))
+
+        async def action_pause():
+            events.append(("pause", "action"))
+
         reader = _reader(mock_page)
         with (
             patch.object(reader._navigator, "_navigate_to_page", side_effect=navigate),
             patch.object(PageSession, "delay", side_effect=delay),
+            patch.object(PageSession, "page_load_pause", side_effect=page_load_pause),
+            patch.object(PageSession, "action_pause", side_effect=action_pause),
             patch(
                 "linkedin_mcp_server.linkedin.session.detect_rate_limit",
                 new_callable=AsyncMock,
@@ -1477,7 +1525,7 @@ class TestGetSidebarProfiles:
         assert events == [
             ("navigate", "https://www.linkedin.com/in/testuser/"),
             ("navigate", first_url),
-            ("delay", 2.0),
+            ("pause", "page_load"),
             ("navigate", second_url),
         ]
 
@@ -1502,10 +1550,18 @@ class TestGetSidebarProfiles:
         async def delay(seconds):
             events.append(("delay", seconds))
 
+        async def page_load_pause():
+            events.append(("pause", "page_load"))
+
+        async def action_pause():
+            events.append(("pause", "action"))
+
         reader = _reader(mock_page)
         with (
             patch.object(reader._navigator, "_navigate_to_page", side_effect=navigate),
             patch.object(PageSession, "delay", side_effect=delay),
+            patch.object(PageSession, "page_load_pause", side_effect=page_load_pause),
+            patch.object(PageSession, "action_pause", side_effect=action_pause),
             patch(
                 "linkedin_mcp_server.linkedin.session.detect_rate_limit",
                 new_callable=AsyncMock,
@@ -1548,10 +1604,18 @@ class TestGetSidebarProfiles:
         async def delay(seconds):
             events.append(("delay", seconds))
 
+        async def page_load_pause():
+            events.append(("pause", "page_load"))
+
+        async def action_pause():
+            events.append(("pause", "action"))
+
         reader = _reader(mock_page)
         with (
             patch.object(reader._navigator, "_navigate_to_page", side_effect=navigate),
             patch.object(PageSession, "delay", side_effect=delay),
+            patch.object(PageSession, "page_load_pause", side_effect=page_load_pause),
+            patch.object(PageSession, "action_pause", side_effect=action_pause),
             patch(
                 "linkedin_mcp_server.linkedin.session.detect_rate_limit",
                 new_callable=AsyncMock,
@@ -1567,7 +1631,7 @@ class TestGetSidebarProfiles:
         assert events == [
             ("navigate", "https://www.linkedin.com/in/testuser/"),
             ("navigate", first_url),
-            ("delay", 2.0),
+            ("pause", "page_load"),
             ("navigate", second_url),
         ]
 

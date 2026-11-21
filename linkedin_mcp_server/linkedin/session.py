@@ -24,12 +24,9 @@ from linkedin_mcp_server.core.utils import (
 )
 
 
-# Pacing between page navigations. Owned by the boundary that performs the
-# pause rather than by any one workflow, because the person, company and job
-# walks pace themselves the same way and a domain service may not import a
-# peer's constant: two copies would let one relocation give two workflows
-# different policies without anything failing.
-NAV_DELAY = 2.0
+# Pacing between page navigations is NOT a constant (Shipsmind fork): every
+# pause is a fresh random draw from the human-input pacer, so no two gaps are
+# alike and nothing runs on a fixed cadence. See linkedin/human_input.py.
 
 # The key the read wrapper puts the document's own address under. Unlikely to
 # collide with anything a read script returns, because a double answering
@@ -49,8 +46,26 @@ class PageSession:
         return time.monotonic()
 
     async def delay(self, seconds: float) -> None:
-        """Pause through the session delay boundary."""
+        """Wait for the PAGE (a poll interval). Not human pacing; see below."""
         await asyncio.sleep(seconds)
+
+    async def page_load_pause(self) -> float:
+        """A person's random pause before opening another LinkedIn page."""
+        from linkedin_mcp_server.core import human_input
+
+        return await human_input.page_load_pause()
+
+    async def action_pause(self) -> float:
+        """A person's random pause between two actions on a page (2-20 s)."""
+        from linkedin_mcp_server.core import human_input
+
+        return await human_input.action_pause()
+
+    async def read_pause(self, text_len: int) -> float:
+        """A person's random reading time for *text_len* characters."""
+        from linkedin_mcp_server.core import human_input
+
+        return await human_input.read_pause(text_len)
 
     async def run_on_linkedin(self, script: str, arg: Any = _NO_ARGUMENT) -> Any:
         """Run a page *script* only in a LinkedIn document, and answer its result.

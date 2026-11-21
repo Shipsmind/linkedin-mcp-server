@@ -17,7 +17,6 @@ import pytest
 from linkedin_mcp_server.core.exceptions import AuthenticationError
 from linkedin_mcp_server.linkedin import capture as capture_module
 from linkedin_mcp_server.linkedin.capture import (
-    RATE_LIMIT_RETRY_DELAY,
     CaptureMode,
     CapturePlan,
     SectionCapture,
@@ -1375,7 +1374,7 @@ class TestPostPermalinkCapture:
                 return None
             return reads.pop(0)
 
-        async def sleep_during_backoff(_seconds):
+        async def sleep_during_backoff(*_args):
             # Call the first-attempt handler even if the page unsubscribed it.
             # Disarm must ignore this; unsubscribe alone is not the assertion.
             for callback in seen_handlers:
@@ -1386,7 +1385,7 @@ class TestPostPermalinkCapture:
         with (
             self._quiet_patches(scroll),
             patch(
-                "linkedin_mcp_server.linkedin.session.asyncio.sleep",
+                "linkedin_mcp_server.core.human_input.page_load_pause",
                 new=sleep_during_backoff,
             ),
         ):
@@ -1580,7 +1579,7 @@ class TestExtractOverlay:
                 new_callable=AsyncMock,
             ),
             patch(
-                "linkedin_mcp_server.linkedin.session.asyncio.sleep",
+                "linkedin_mcp_server.core.human_input.page_load_pause",
                 new_callable=AsyncMock,
             ) as sleep,
         ):
@@ -1590,7 +1589,7 @@ class TestExtractOverlay:
 
         assert result.text == "Email\nada@example.com"
         assert mock_page.goto.await_count == 2
-        sleep.assert_awaited_once_with(RATE_LIMIT_RETRY_DELAY)
+        sleep.assert_awaited_once_with()
 
     async def test_a_noise_only_retry_reports_the_rate_limit_sentinel(self, mock_page):
         mock_page.evaluate = AsyncMock(
@@ -1604,7 +1603,7 @@ class TestExtractOverlay:
                 new_callable=AsyncMock,
             ),
             patch(
-                "linkedin_mcp_server.linkedin.session.asyncio.sleep",
+                "linkedin_mcp_server.core.human_input.page_load_pause",
                 new_callable=AsyncMock,
             ),
         ):
@@ -1710,7 +1709,7 @@ class TestMissingOverlayRoot:
                 new_callable=AsyncMock,
             ),
             patch(
-                "linkedin_mcp_server.linkedin.session.asyncio.sleep",
+                "linkedin_mcp_server.core.human_input.page_load_pause",
                 new_callable=AsyncMock,
             ) as sleep,
             patch(
@@ -1851,7 +1850,7 @@ class TestMissingOverlayRoot:
         assert result == ExtractedSection(text=RATE_LIMITED_SECTION_TEXT, references=[])
         assert reads.calls == [OVERLAY_ROOTS, MAIN_ROOT] * 2
         assert mock_page.goto.await_count == 2
-        sleep.assert_awaited_once_with(RATE_LIMIT_RETRY_DELAY)
+        sleep.assert_awaited_once_with()
         diagnostics.assert_not_called()
 
     async def test_noise_ahead_of_a_substantive_main_is_not_a_throttle(self, mock_page):
@@ -1905,7 +1904,7 @@ class TestMissingOverlayRoot:
         ]
         assert result.error is None
         assert mock_page.goto.await_count == 2
-        sleep.assert_awaited_once_with(RATE_LIMIT_RETRY_DELAY)
+        sleep.assert_awaited_once_with()
 
     async def test_a_throttled_miss_then_an_ordinary_miss_stops_after_one_retry(
         self, mock_page
@@ -1933,7 +1932,7 @@ class TestMissingOverlayRoot:
         assert result.error == self.MISSING_ROOT
         assert result.references == []
         assert mock_page.goto.await_count == 2
-        sleep.assert_awaited_once_with(RATE_LIMIT_RETRY_DELAY)
+        sleep.assert_awaited_once_with()
         diagnostics.assert_not_called()
 
     async def test_a_rate_limit_error_still_propagates(self, mock_page):

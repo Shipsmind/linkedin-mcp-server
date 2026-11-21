@@ -45,6 +45,24 @@ class AccountRestrictedError(LinkedInOperationError):
         )
 
 
+class SecurityCheckError(LinkedInOperationError):
+    """LinkedIn is showing a security check: a checkpoint, captcha or HTTP 999.
+
+    Deliberately neither an ``AuthenticationError`` (which retires the session
+    and opens a login window) nor a ``RateLimitError`` (which one caller
+    retries). A person clears the check in the visible browser window; until
+    then nothing may click, type, scroll, retry or navigate on that page.
+    """
+
+    def __init__(self, reason: str | None = None):
+        self.reason = reason or "security check"
+        super().__init__(
+            f"LinkedIn is showing a security check ({self.reason}). Nothing more "
+            "was done on the page. Clear the check yourself in the open browser "
+            "window; automation stays stopped until you say it is cleared."
+        )
+
+
 class RateLimitError(LinkedInOperationError):
     """Raised when rate limiting is detected."""
 

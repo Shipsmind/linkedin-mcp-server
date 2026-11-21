@@ -21,6 +21,8 @@ from urllib.parse import parse_qs, urlparse
 import anyio
 from patchright.async_api import TimeoutError as PlaywrightTimeoutError
 
+from linkedin_mcp_server.core.security_watch import raise_if_tripped
+from linkedin_mcp_server.core import human_input
 from linkedin_mcp_server.core.exceptions import LinkedInOperationError
 from linkedin_mcp_server.core.utils import (
     _JOB_CARD_SELECTOR,
@@ -994,7 +996,8 @@ class JobPageReader:
                 url,
                 RATE_LIMIT_RETRY_DELAY,
             )
-            await asyncio.sleep(RATE_LIMIT_RETRY_DELAY)
+            raise_if_tripped()  # never retry after a security signal
+            await human_input.page_load_pause()
             result = await self._extract_search_page_once(
                 url,
                 section_name,
@@ -1204,7 +1207,8 @@ class JobPageReader:
                     url,
                     RATE_LIMIT_RETRY_DELAY,
                 )
-                await asyncio.sleep(RATE_LIMIT_RETRY_DELAY)
+                raise_if_tripped()  # never retry after a security signal
+                await human_input.page_load_pause()
                 result = await self._extract_saved_jobs_page_once(url, section_name)
                 if result.text == RATE_LIMITED_SECTION_TEXT:
                     logger.warning(

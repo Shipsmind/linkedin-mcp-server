@@ -25,7 +25,7 @@ from linkedin_mcp_server.linkedin.identifiers import (
 )
 from linkedin_mcp_server.linkedin.link_metadata import Reference
 from linkedin_mcp_server.linkedin.search_urls import build_company_search_url
-from linkedin_mcp_server.linkedin.session import NAV_DELAY, PageSession
+from linkedin_mcp_server.linkedin.session import PageSession
 
 if TYPE_CHECKING:
     from linkedin_mcp_server.callbacks import ProgressCallback
@@ -72,7 +72,7 @@ class CompanyReader:
         try:
             for i, spec in enumerate(requested_ordered):
                 if i > 0:
-                    await self._session.delay(NAV_DELAY)
+                    await self._session.page_load_pause()
 
                 section_name = spec.name
                 url = base_url + spec.suffix

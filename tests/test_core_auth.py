@@ -219,7 +219,6 @@ async def test_the_quick_check_asks_the_page_for_a_picker():
     "url",
     [
         "https://www.linkedin.com/login",
-        "https://de.linkedin.com/checkpoint/challenge/",
         "https://linkedin.com/authwall",
     ],
 )
@@ -231,6 +230,20 @@ async def test_linkedin_s_own_auth_routes_still_count(url: str):
 
     assert result is not None
     assert "auth blocker URL" in result
+
+
+@pytest.mark.asyncio
+async def test_a_checkpoint_on_any_linkedin_host_is_a_security_check():
+    """A challenge is not a sign-in: it raises SecurityCheckError, so no login
+    window opens and the session is kept for the person clearing it."""
+    from linkedin_mcp_server.core.exceptions import SecurityCheckError
+
+    page = _barrier_page(
+        url="https://de.linkedin.com/checkpoint/challenge/", title="LinkedIn"
+    )
+
+    with pytest.raises(SecurityCheckError):
+        await detect_auth_barrier(page)
 
 
 @pytest.mark.asyncio

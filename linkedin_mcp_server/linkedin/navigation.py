@@ -9,6 +9,12 @@ from typing import Any, Literal
 import logging
 import re
 
+from linkedin_mcp_server.core.activity_log import emit
+from linkedin_mcp_server.core.security_watch import (
+    raise_if_tripped,
+    set_active_page,
+    trip_on_navigation_error,
+)
 from linkedin_mcp_server.core.auth import (
     detect_auth_barrier,
     detect_auth_barrier_quick,
@@ -164,7 +170,12 @@ class PageNavigator:
         carried into the retry lets a first attempt that timed out spend the
         same allowance a second time.
         """
+        # Never navigate once a security signal fired: the page a person must
+        # clear stays where it is.
+        raise_if_tripped()
         page = self._session.page
+        set_active_page(page)
+        emit("navigate", url=url)
         timeout_ms: float = self._GOTO_TIMEOUT_MS
         overall_ms: float | None = None
         if deadline is not None:
@@ -218,6 +229,7 @@ class PageNavigator:
                         timeout=timeout_ms,
                     )
                 await stabilize_navigation(f"goto {url}", logger)
+                raise_if_tripped()
                 await record_page_trace(
                     page,
                     "extractor-after-goto",
@@ -229,6 +241,9 @@ class PageNavigator:
                 # password in trace.jsonl. Converting here also keeps a proxy
                 # outage from being reported as a LinkedIn navigation problem.
                 raise_if_proxy_error(exc)
+                # A 429/999 often arrives as a goto error before any body (#957).
+                trip_on_navigation_error(exc, url)
+                raise_if_tripped()
                 if allow_remember_me and await resolve_remember_me_prompt(page):
                     await stabilize_navigation(
                         f"remember-me resolution for {url}", logger

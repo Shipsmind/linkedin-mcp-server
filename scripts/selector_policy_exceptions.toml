@@ -50,10 +50,17 @@ reason = "Contact-info overlay root beside dialog[open]: the wait, the root list
 
 [[exception]]
 file = "linkedin_mcp_server/linkedin/conversations.py"
-symbol = "_extract_conversation_thread_refs"
+symbol = "_ROW_LISTING_JS"
 text = '[class*="listitem__link"]'
 count = 1
-reason = "No role/aria attributes exist on the clickable element, so class-name selectors are unavoidable here."
+reason = "No role/aria attributes exist on the clickable element, so class-name selectors are unavoidable here. The read-only row listing checks each row has it."
+
+[[exception]]
+file = "linkedin_mcp_server/linkedin/conversations.py"
+symbol = "_open_rows_humanly"
+text = '[class*="listitem__link"]'
+count = 1
+reason = "The same clickable element, located from Python so the row is opened with a real mouse click instead of an in-page element.click()."
 
 [[exception]]
 file = "linkedin_mcp_server/linkedin/job_pages.py"

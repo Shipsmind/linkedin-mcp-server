@@ -228,7 +228,163 @@
       "handle": "handle-1",
       "kind": "handle.evaluate",
       "operation": "message_composer_write",
-      "program_digest": "2219cd2ff200",
+      "program_digest": "09033da5197d",
+      "section": "message"
+    },
+    {
+      "call": "send_message",
+      "kind": "locator.create",
+      "locator": "composer_editor",
+      "parent": null,
+      "section": "message",
+      "selector": "[data-shipsmind-click=\"composer\"]"
+    },
+    {
+      "call": "send_message",
+      "kind": "locator.derive",
+      "locator": "composer_editor.first",
+      "operation": "first",
+      "parent": "composer_editor",
+      "section": "message"
+    },
+    {
+      "call": "send_message",
+      "kind": "locator.click",
+      "locator": "composer_editor.first",
+      "section": "message",
+      "timeout_ms": null
+    },
+    {
+      "call": "send_message",
+      "handle": "handle-1",
+      "kind": "handle.evaluate",
+      "operation": "message_composer_focused",
+      "program_digest": "1d94b9e296f2",
+      "section": "message"
+    },
+    {
+      "call": "send_message",
+      "delay_ms": null,
+      "kind": "keyboard.type",
+      "section": "message",
+      "text": "N"
+    },
+    {
+      "call": "send_message",
+      "handle": "handle-1",
+      "kind": "handle.evaluate",
+      "operation": "message_composer_focused",
+      "program_digest": "1d94b9e296f2",
+      "section": "message"
+    },
+    {
+      "call": "send_message",
+      "delay_ms": null,
+      "kind": "keyboard.type",
+      "section": "message",
+      "text": "e"
+    },
+    {
+      "call": "send_message",
+      "handle": "handle-1",
+      "kind": "handle.evaluate",
+      "operation": "message_composer_focused",
+      "program_digest": "1d94b9e296f2",
+      "section": "message"
+    },
+    {
+      "call": "send_message",
+      "delay_ms": null,
+      "kind": "keyboard.type",
+      "section": "message",
+      "text": "w"
+    },
+    {
+      "call": "send_message",
+      "handle": "handle-1",
+      "kind": "handle.evaluate",
+      "operation": "message_composer_focused",
+      "program_digest": "1d94b9e296f2",
+      "section": "message"
+    },
+    {
+      "call": "send_message",
+      "delay_ms": null,
+      "kind": "keyboard.type",
+      "section": "message",
+      "text": " "
+    },
+    {
+      "call": "send_message",
+      "handle": "handle-1",
+      "kind": "handle.evaluate",
+      "operation": "message_composer_focused",
+      "program_digest": "1d94b9e296f2",
+      "section": "message"
+    },
+    {
+      "call": "send_message",
+      "delay_ms": null,
+      "kind": "keyboard.type",
+      "section": "message",
+      "text": "t"
+    },
+    {
+      "call": "send_message",
+      "handle": "handle-1",
+      "kind": "handle.evaluate",
+      "operation": "message_composer_focused",
+      "program_digest": "1d94b9e296f2",
+      "section": "message"
+    },
+    {
+      "call": "send_message",
+      "delay_ms": null,
+      "kind": "keyboard.type",
+      "section": "message",
+      "text": "e"
+    },
+    {
+      "call": "send_message",
+      "handle": "handle-1",
+      "kind": "handle.evaluate",
+      "operation": "message_composer_focused",
+      "program_digest": "1d94b9e296f2",
+      "section": "message"
+    },
+    {
+      "call": "send_message",
+      "delay_ms": null,
+      "kind": "keyboard.type",
+      "section": "message",
+      "text": "x"
+    },
+    {
+      "call": "send_message",
+      "handle": "handle-1",
+      "kind": "handle.evaluate",
+      "operation": "message_composer_focused",
+      "program_digest": "1d94b9e296f2",
+      "section": "message"
+    },
+    {
+      "call": "send_message",
+      "delay_ms": null,
+      "kind": "keyboard.type",
+      "section": "message",
+      "text": "t"
+    },
+    {
+      "arg": {
+        "message": "New text",
+        "profilePath": "/in/ada-lovelace/",
+        "profileUrn": "ACoAA-policy"
+      },
+      "call": "send_message",
+      "handle": "handle-1",
+      "kind": "handle.evaluate",
+      "operation": "message_composer_confirm",
+      "program_digest": "c122852b42e2",
       "section": "message"
     },
     {
@@ -269,7 +425,7 @@
       "handle": "handle-1",
       "kind": "handle.evaluate",
       "operation": "message_submit",
-      "program_digest": "88dff3456522",
+      "program_digest": "74b30fbc0d1d",
       "section": "message"
     },
     {

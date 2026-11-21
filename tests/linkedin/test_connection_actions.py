@@ -157,7 +157,7 @@ class TestConnectWithPerson:
                 return_value=True,
             ),
             patch(
-                "linkedin_mcp_server.linkedin.connection_actions.asyncio.sleep",
+                "linkedin_mcp_server.core.human_input.action_pause",
                 new_callable=AsyncMock,
             ),
         ):
@@ -211,7 +211,7 @@ class TestConnectWithPerson:
                 return_value=False,
             ),
             patch(
-                "linkedin_mcp_server.linkedin.connection_actions.asyncio.sleep",
+                "linkedin_mcp_server.core.human_input.action_pause",
                 new_callable=AsyncMock,
             ) as mock_sleep,
         ):
@@ -255,7 +255,7 @@ class TestConnectWithPerson:
                 return_value=True,
             ),
             patch(
-                "linkedin_mcp_server.linkedin.connection_actions.asyncio.sleep",
+                "linkedin_mcp_server.core.human_input.action_pause",
                 new_callable=AsyncMock,
             ),
         ):
@@ -729,7 +729,7 @@ class TestConnectWithPerson:
                 return_value=True,
             ),
             patch(
-                "linkedin_mcp_server.linkedin.connection_actions.asyncio.sleep",
+                "linkedin_mcp_server.core.human_input.action_pause",
                 new_callable=AsyncMock,
             ),
         ):
@@ -762,7 +762,7 @@ class TestConnectWithPerson:
                 return_value=True,
             ),
             patch(
-                "linkedin_mcp_server.linkedin.connection_actions.asyncio.sleep",
+                "linkedin_mcp_server.core.human_input.action_pause",
                 new_callable=AsyncMock,
             ) as mock_sleep,
         ):
@@ -1118,6 +1118,7 @@ class TestInviteDialog:
         mock_page.locator.side_effect = locator_for
         mock_page.keyboard = MagicMock()
         mock_page.keyboard.press = AsyncMock()
+        mock_page.keyboard.type = AsyncMock()
 
         message = "You're out of free custom notes. Bypass the limit with Premium..."
 
@@ -1318,6 +1319,9 @@ class TestInviteDialog:
         )
         textarea_locator.first = textarea_locator
         textarea_locator.fill = AsyncMock()
+        # The note is typed with real input: a click into the box, then keys.
+        textarea_locator.click = AsyncMock()
+        textarea_locator.bounding_box = AsyncMock(return_value=None)
         held_in(textarea_locator)
 
         # Route page.locator() calls by selector — buttons vs textarea —
@@ -1332,6 +1336,7 @@ class TestInviteDialog:
         mock_page.wait_for_selector = AsyncMock()
         mock_page.keyboard = MagicMock()
         mock_page.keyboard.press = AsyncMock()
+        mock_page.keyboard.type = AsyncMock()
 
         with (
             patch.object(
@@ -1356,4 +1361,7 @@ class TestInviteDialog:
         # Clicked "Add a note" (index 0) to reveal the textarea, then the
         # primary button (index 1) to send.
         assert clicks == [0, 1]
-        textarea_locator.fill.assert_awaited_once()
+        # Typed one key at a time with real keyboard events, never fill().
+        typed = "".join(c.args[0] for c in mock_page.keyboard.type.await_args_list)
+        assert typed == "Hi from a test"
+        textarea_locator.fill.assert_not_awaited()

@@ -38,6 +38,8 @@ from linkedin_mcp_server.linkedin.feed_payload import (
 from linkedin_mcp_server.linkedin.link_metadata import build_references
 from linkedin_mcp_server.linkedin.navigation import PageNavigator
 from linkedin_mcp_server.linkedin.session import PageSession
+from linkedin_mcp_server.core import human_input
+from linkedin_mcp_server.core.security_watch import raise_if_tripped
 from linkedin_mcp_server.linkedin.text import (
     DETAIL_CAPTURE_EN_US,
     JOB_POSTING_EN_US,
@@ -260,6 +262,9 @@ class SectionCapture:
                 result = await self._capture_once(url, section_name, plan, listener)
                 if result.text != RATE_LIMITED_SECTION_TEXT:
                     return result
+                # Never retry once a security check or a 429/999 was seen: the
+                # tripwire raises here and the page is left as it is.
+                raise_if_tripped()
 
                 if CaptureMode.OVERLAY in plan.mode:
                     logger.info(
@@ -280,7 +285,9 @@ class SectionCapture:
                     # backoff, then arm again before the retry navigates.
                     listener.remove()
                     await listener.discard_attempt()
-                await self._session.delay(RATE_LIMIT_RETRY_DELAY)
+                # A person's random wait, not a fixed backoff.
+                await self._session.page_load_pause()
+                raise_if_tripped()
                 if listener is not None:
                     listener.install()
                 return await self._capture_once(url, section_name, plan, listener)
@@ -425,10 +432,10 @@ class SectionCapture:
                     if not await target.is_visible():
                         break
                     async with linkedin_element(target, timeout=2000) as button:
-                        await button.scroll_into_view_if_needed(timeout=2000)
-                        await button.click(timeout=2000)
-                    await self._session.delay(1.0)
-                except OffLinkedInLandingError:
+                        await human_input.move_and_click(self._session.page, button)
+                    await self._session.action_pause()
+                except (OffLinkedInLandingError, LinkedInOperationError):
+                    # SecurityCheckError / RateLimitError included: stop at once.
                     raise
                 except PlaywrightTimeoutError:
                     logger.debug("Show more click timed out after %d clicks", i)

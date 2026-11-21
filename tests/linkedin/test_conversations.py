@@ -14,6 +14,8 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
+import re
+
 import pytest
 
 from linkedin_mcp_server.core.exceptions import (
@@ -139,6 +141,11 @@ def _outcome(
     }
 
 
+async def _rows_as_listed(listing: dict[str, Any]) -> dict[str, Any]:
+    """Stand-in for opening the rows: the listing already is the outcome."""
+    return listing
+
+
 def _scan(
     *refs: Reference,
     stopped_at: _StoppedRow | None = None,
@@ -234,6 +241,9 @@ class TestExtractConversationThreadRefs:
         and a filter that never arrives clicks every row in the sidebar.
         """
         reader = _reader(mock_page)
+        # Row clicking is covered in TestOpenRowsHumanly; here the listing the
+        # page returns stands in for the outcome of opening the rows.
+        reader._open_rows_humanly = _rows_as_listed
         captured: dict[str, object] = {}
 
         async def fake_evaluate(_js: str, arg: dict | None = None) -> dict:
@@ -261,6 +271,9 @@ class TestExtractConversationThreadRefs:
         from patchright.async_api import TimeoutError as PlaywrightTimeoutError
 
         reader = _reader(mock_page)
+        # Row clicking is covered in TestOpenRowsHumanly; here the listing the
+        # page returns stands in for the outcome of opening the rows.
+        reader._open_rows_humanly = _rows_as_listed
         mock_page.wait_for_selector = AsyncMock(
             side_effect=PlaywrightTimeoutError("no rows")
         )
@@ -284,6 +297,9 @@ class TestExtractConversationThreadRefs:
         labels are reliably attached and not reliably visible.
         """
         reader = _reader(mock_page)
+        # Row clicking is covered in TestOpenRowsHumanly; here the listing the
+        # page returns stands in for the outcome of opening the rows.
+        reader._open_rows_humanly = _rows_as_listed
         mock_page.evaluate = AsyncMock(return_value=_outcome())
 
         await reader._extract_conversation_thread_refs(limit=None, context="inbox")
@@ -302,6 +318,9 @@ class TestExtractConversationThreadRefs:
         returns one row instead of two.
         """
         reader = _reader(mock_page)
+        # Row clicking is covered in TestOpenRowsHumanly; here the listing the
+        # page returns stands in for the outcome of opening the rows.
+        reader._open_rows_humanly = _rows_as_listed
         order: list[str] = []
         scrolled = 0
 
@@ -313,7 +332,8 @@ class TestExtractConversationThreadRefs:
             if "isScrollable" in js:
                 order.append("scroll")
                 scrolled += 1
-                return True
+                # Already at the edge: one measurement per attempt.
+                return {"x": 0, "y": 0, "width": 400, "height": 600, "atBottom": True}
             order.append("rows")
             rows = [_row("Ada", "2-ada")]
             if scrolled >= 2:
@@ -336,6 +356,9 @@ class TestExtractConversationThreadRefs:
     async def test_every_ref_carries_the_callers_context_label(self, mock_page):
         """The label is how a consumer tells an inbox row from a search hit."""
         reader = _reader(mock_page)
+        # Row clicking is covered in TestOpenRowsHumanly; here the listing the
+        # page returns stands in for the outcome of opening the rows.
+        reader._open_rows_humanly = _rows_as_listed
         mock_page.evaluate = AsyncMock(
             return_value=_outcome(_row("Jacki McMahan", "2-aaa"))
         )
@@ -358,6 +381,9 @@ class TestExtractConversationThreadRefs:
         participant, and the resolver's exact-equality match would accept it
         for a display name that stripped to nothing."""
         reader = _reader(mock_page)
+        # Row clicking is covered in TestOpenRowsHumanly; here the listing the
+        # page returns stands in for the outcome of opening the rows.
+        reader._open_rows_humanly = _rows_as_listed
         mock_page.evaluate = AsyncMock(
             return_value=_outcome(
                 {"ariaLabel": "Select conversation with ", "threadId": "2-aaa"}
@@ -386,6 +412,9 @@ class TestExtractConversationThreadRefs:
         scan would read as complete.
         """
         reader = _reader(mock_page)
+        # Row clicking is covered in TestOpenRowsHumanly; here the listing the
+        # page returns stands in for the outcome of opening the rows.
+        reader._open_rows_humanly = _rows_as_listed
         mock_page.evaluate = AsyncMock(
             return_value=_outcome(
                 _row("Tess", "2-t"),
@@ -416,6 +445,9 @@ class TestExtractConversationThreadRefs:
         self, mock_page
     ):
         reader = _reader(mock_page)
+        # Row clicking is covered in TestOpenRowsHumanly; here the listing the
+        # page returns stands in for the outcome of opening the rows.
+        reader._open_rows_humanly = _rows_as_listed
         mock_page.evaluate = AsyncMock(return_value=_outcome())
 
         outcome = await reader._extract_conversation_thread_refs(
@@ -566,6 +598,7 @@ class TestResolveConversationThreadUrls:
         from patchright.async_api import TimeoutError as PlaywrightTimeoutError
 
         reader = _reader(mock_page)
+        reader._open_rows_humanly = _rows_as_listed
         mock_page.wait_for_selector = AsyncMock(
             side_effect=[PlaywrightTimeoutError("no rows"), None]
         )
@@ -1771,31 +1804,48 @@ class TestSearchConversations:
 
 
 class TestScrollMainScrollableRegion:
-    async def test_each_attempt_is_one_evaluation_paced_by_the_delay(
+    async def test_each_attempt_measures_the_region_then_scrolls_with_the_wheel(
         self, mock_page, session_boundaries
     ):
-        """The loop runs the program once per attempt and pauses after each.
+        """One read-only measurement per attempt, then mouse-wheel input over it.
 
-        Dropping or zeroing the pause runs every scroll before the browser has
-        appended anything, which reads as a sidebar with nothing more to load.
+        The page script never scrolls (no scrollTop writes): the wheel does,
+        with the pointer inside the region, as a person's scroll would.
         """
         reader = _reader(mock_page)
-        mock_page.evaluate = AsyncMock(return_value=True)
+        box = {"x": 100, "y": 100, "width": 400, "height": 600}
+        # Each attempt: not at the bottom yet, wheel, then at the bottom.
+        mock_page.evaluate = AsyncMock(
+            side_effect=[
+                {**box, "atBottom": False},
+                {**box, "atBottom": True},
+            ]
+            * 3
+        )
 
         await reader._scroll_main_scrollable_region(
             position="bottom", attempts=3, pause_time=0.25
         )
 
-        assert mock_page.evaluate.await_count == 3
-        assert [call.args[1] for call in mock_page.evaluate.await_args_list] == [
-            {"position": "bottom"}
-        ] * 3
-        assert session_boundaries.delay.await_count == 3
-        assert [call.args for call in session_boundaries.delay.await_args_list] == [
-            (0.25,),
-            (0.25,),
-            (0.25,),
-        ]
+        assert mock_page.evaluate.await_count == 6
+        assert not any(
+            re.search(r"scrollTop\s*=(?!=)", call.args[0])
+            for call in mock_page.evaluate.await_args_list
+        )
+        wheel_deltas = [c.args[1] for c in mock_page.mouse.wheel.await_args_list]
+        assert len(wheel_deltas) >= 6 and all(d > 0 for d in wheel_deltas)
+        assert mock_page.mouse.move.await_count > 0
+
+    async def test_a_region_that_cannot_be_measured_is_not_scrolled(
+        self, mock_page, session_boundaries
+    ):
+        reader = _reader(mock_page)
+        mock_page.evaluate = AsyncMock(return_value=None)
+
+        await reader._scroll_main_scrollable_region(position="top", attempts=3)
+
+        assert mock_page.evaluate.await_count == 1
+        mock_page.mouse.wheel.assert_not_awaited()
 
     async def test_a_zero_budget_evaluates_nothing(self, mock_page):
         reader = _reader(mock_page)

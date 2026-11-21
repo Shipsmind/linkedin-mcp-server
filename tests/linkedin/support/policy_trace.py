@@ -206,6 +206,12 @@ class ScriptedLocator:
     async def focus(self) -> None:
         await self._operation("focus")
 
+    async def get_attribute(self, name: str) -> Any:
+        return await self._operation("get_attribute", attribute=name)
+
+    async def press(self, key: str) -> None:
+        await self._operation("press", key=key)
+
     async def element_handle(self, *, timeout: float | None = None) -> ScriptedHandle:
         """The one element this locator resolves to, as an element handle.
 
@@ -242,6 +248,10 @@ class _Keyboard:
     async def type(self, text: str, *, delay: int | None = None) -> None:
         self.page.recorder.record("keyboard.type", text=text, delay_ms=delay)
         self.page._take("keyboard.type", default=None)
+
+    async def insert_text(self, text: str) -> None:
+        self.page.recorder.record("keyboard.insert_text", text=text)
+        self.page._take("keyboard.insert_text", default=None)
 
 
 class ScriptedHandle:
@@ -368,6 +378,7 @@ class ScriptedPage:
         self.scripts: dict[str, Script] = {}
         self.locator_ids: dict[tuple[str | None, str], str] = {}
         self.derived_ids: dict[tuple[str, str], str] = {}
+        self.repeating: dict[str, Any] = {}
         self.listeners: dict[str, list[Callable[..., Any]]] = defaultdict(list)
         self.goto_landings: deque[str] = deque()
         self.handles: list[ScriptedHandle] = []
@@ -375,6 +386,11 @@ class ScriptedPage:
 
     def script(self, operation: str, *values: Any) -> ScriptedPage:
         self.scripts[operation] = Script(values)
+        return self
+
+    def script_always(self, operation: str, value: Any) -> ScriptedPage:
+        """Answer *operation* with *value* every time (a per-key check)."""
+        self.repeating[operation] = value
         return self
 
     def declare_locator(
@@ -390,6 +406,8 @@ class ScriptedPage:
         return ScriptedLocator(self, semantic_id)
 
     def _take(self, operation: str, default: Any = _MISSING) -> Any:
+        if operation in self.repeating:
+            return self.repeating[operation]
         script = self.scripts.get(operation)
         if script is None:
             if default is not _MISSING:
@@ -688,10 +706,19 @@ def semantic_program_id(program: str) -> str:
         ("return inspect(target).status === 'valid'", "message_composer_ready"),
         ("submitUsable", "message_composer_state"),
         ("__linkedinMcpComposer =", "message_composer_owner"),
-        ("document.execCommand('insertText'", "message_composer_write"),
+        ("setAttribute('data-shipsmind-click', 'composer')", "message_composer_write"),
+        ("pinned.ownedMessage = arg.message", "message_composer_confirm"),
+        ("document.activeElement === pinned.editor; }", "message_composer_focused"),
         ("return pinned.button.disabled", "message_submit_ready"),
         ("inputType: 'deleteContentBackward'", "message_composer_cleanup"),
-        ("pinned.button.click()", "message_submit"),
+        (
+            "pinned.button.setAttribute('data-shipsmind-click', 'send')",
+            "message_submit",
+        ),
+        (
+            "el.removeAttribute('data-shipsmind-click'); return true;",
+            "click_mark_cleanup",
+        ),
         ("__linkedinMcpConfirmationCounter", "message_confirmation_prepare"),
         ("const routeContinues", "message_confirmation_ready"),
         ("confirmations?.delete(arg.token)", "message_confirmation_dispose"),
@@ -706,6 +733,7 @@ def semantic_program_id(program: str) -> str:
         ("descriptionHeadings, closedLines", "job_apply_signals"),
         ("const heading = document.querySelector('main h1')", "profile_display_name"),
         ("main li label[aria-label]", "conversation_thread_refs"),
+        ("location.pathname.match(/^\\/messaging\\/thread", "thread_id"),
         ("isScrollable", "scroll_main_region"),
         ("jobs-search-pagination__page-state", "job_total_pages"),
         ("artdeco-pagination__pages", "saved_job_total_pages"),

@@ -350,9 +350,9 @@ async def test_row_click_trace_detects_a_dropped_stop_diagnostic():
 async def test_row_click_trace_detects_a_changed_row_program():
     """The digest follows the submitted program, not only its marker.
 
-    Twelve polls become eleven while the selector marker stays, so the
-    operation name alone would not notice. The behavioural twin is the
-    exact-budget case in the browser-DOM suite.
+    The listing's row cap changes while the selector marker stays, so the
+    operation name alone would not notice. (The row clicks and their poll
+    budget run in Python since the Shipsmind human-input change.)
     """
     original = ScriptedPage.evaluate
     replaced: list[str] = []
@@ -361,8 +361,9 @@ async def test_row_click_trace_detects_a_changed_row_program():
     async def shorten_budget(
         self: ScriptedPage, expression: str, *args: Any, **kwargs: Any
     ) -> Any:
-        if "main li label[aria-label]" in expression and "waits < 12" in expression:
-            expression = expression.replace("waits < 12", "waits < 11")
+        cap = "Math.min(labels.length, limit)"
+        if "main li label[aria-label]" in expression and cap in expression:
+            expression = expression.replace(cap, "Math.min(labels.length, limit + 1)")
             replaced.append(expression)
         return await original(self, expression, *args, **kwargs)
 

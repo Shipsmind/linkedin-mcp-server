@@ -22,6 +22,7 @@ from linkedin_mcp_server.core.exceptions import (
     LinkedInOperationError,
 )
 import linkedin_mcp_server.linkedin.contracts as contracts
+from linkedin_mcp_server.core import human_input
 from linkedin_mcp_server.linkedin.identifiers import (
     messaging_thread_url,
     normalize_person_identifier,
@@ -1201,21 +1202,43 @@ _MESSAGE_COMPOSER_WRITE_JS = (
         if ((editor.innerText || '').replace(/\s+/g, ' ').trim()) {
             return 'occupied';
         }
-        if (
-            typeof document.queryCommandSupported !== 'function' ||
-            !document.queryCommandSupported('insertText') ||
-            typeof document.execCommand !== 'function'
-        ) {
-            return 'unsupported';
+        // Shipsmind fork: tagged for Python to type into with real key
+        // presses; no text is inserted by script.
+        editor.setAttribute('data-shipsmind-click', 'composer');
+        return 'ready';
+    }"""
+)
+
+# Whether the pinned editor still has focus; asked before every typed key.
+_MESSAGE_COMPOSER_FOCUSED_JS = (
+    "(owner) => { const pinned = owner?.__linkedinMcpComposer; "
+    "return !!pinned && document.activeElement === pinned.editor; }"
+)
+
+# After a person typed the message: confirm it is exactly the message, in the
+# same pinned editor, and take ownership of it for cleanup.
+_MESSAGE_COMPOSER_CONFIRM_JS = (
+    "(owner, arg) => {"
+    + _MESSAGE_COMPOSER_PINNED_JS
+    + _MESSAGE_EDITOR_LINES_JS
+    + r"""
+        for (const el of document.querySelectorAll('[data-shipsmind-click="composer"]')) {
+            el.removeAttribute('data-shipsmind-click');
         }
-        const inserted = document.execCommand('insertText', false, arg.message);
+        // Ownership first, as the one-shot insert did: text this call typed
+        // stays removable by the owned-text cleanup even when the composer
+        // changed meanwhile and the checks below refuse it.
+        const held = owner?.__linkedinMcpComposer;
+        if (held?.editor && editorMatches(held.editor, arg.message)) {
+            held.ownedMessage = arg.message;
+        }
+        const pinned = validatePinned(arg, false);
+        if (!pinned) return 'invalid';
+        const {editor} = pinned;
         if (editorMatches(editor, arg.message)) {
             pinned.ownedMessage = arg.message;
         }
-        if (inserted !== true) return 'unsupported';
-        pinned = validatePinned(arg, false);
         if (
-            !pinned ||
             document.activeElement !== editor ||
             pinned.ownedMessage !== arg.message ||
             !editorMatches(editor, arg.message)
@@ -1300,8 +1323,9 @@ _MESSAGE_COMPOSER_SUBMIT_JS = (
         ) {
             return 'invalid';
         }
-        pinned.button.click();
-        return 'clicked';
+        // Shipsmind fork: tagged for a real mouse click from Python.
+        pinned.button.setAttribute('data-shipsmind-click', 'send');
+        return 'tagged';
     }"""
 )
 
@@ -1730,12 +1754,45 @@ class MessageSender:
         target: _MessageTarget,
         owner: Any,
     ) -> str:
-        """Insert text synchronously into the pinned local editor."""
-        result = await owner.evaluate(
-            _MESSAGE_COMPOSER_WRITE_JS,
-            {**self._message_target_argument(target), "message": message},
+        """Type the message into the pinned local editor like a person.
+
+        The page script verifies and tags the editor; the text is then typed
+        one key at a time with real keyboard events; a second script confirms
+        the editor holds exactly the message before anything is sent.
+        """
+        argument = {**self._message_target_argument(target), "message": message}
+        prepared = await owner.evaluate(_MESSAGE_COMPOSER_WRITE_JS, argument)
+        if prepared != "ready":
+            return prepared if prepared in {"occupied", "unsupported"} else "invalid"
+        editor = self._page.locator('[data-shipsmind-click="composer"]').first
+
+        async def editor_has_focus() -> bool:
+            try:
+                return bool(await owner.evaluate(_MESSAGE_COMPOSER_FOCUSED_JS))
+            except Exception:
+                logger.debug("Could not check composer focus", exc_info=True)
+                return False
+
+        # Line breaks become new paragraphs without ever pressing Enter.
+        typed = await human_input.human_type(
+            self._page,
+            editor,
+            message,
+            still_focused=editor_has_focus,
+            newline_key="paragraph",
         )
-        return result if result in {"written", "occupied", "unsupported"} else "invalid"
+        if typed != message:
+            # Focus left the editor mid-message: nothing more was typed. Take
+            # ownership of exactly the typed prefix (only if the editor holds
+            # exactly that) and remove it through the owned-text cleanup.
+            if typed:
+                await owner.evaluate(
+                    _MESSAGE_COMPOSER_CONFIRM_JS, {**argument, "message": typed}
+                )
+                await self._cleanup_owned_message(typed, owner)
+            return "invalid"
+        result = await owner.evaluate(_MESSAGE_COMPOSER_CONFIRM_JS, argument)
+        return "written" if result == "written" else "invalid"
 
     async def _wait_for_verified_submit(
         self,
@@ -1773,12 +1830,21 @@ class MessageSender:
         target: _MessageTarget,
         owner: Any,
     ) -> str:
-        """Click the one active submit button pinned with the local editor."""
+        """Click the one active submit button pinned with the local editor.
+
+        The page script re-verifies the pinned editor and tags its button; the
+        click is real mouse input from Python.
+        """
         result = await owner.evaluate(
             _MESSAGE_COMPOSER_SUBMIT_JS,
             {**self._message_target_argument(target), "message": message},
         )
-        return "clicked" if result == "clicked" else "invalid"
+        if result != "tagged":
+            return "invalid"
+        clicked = await human_input.click_marked(
+            self._page, self._page.evaluate, "send"
+        )
+        return "clicked" if clicked else "invalid"
 
     @staticmethod
     async def _cleanup_owned_message(message: str, owner: Any) -> None:

@@ -466,7 +466,13 @@ async def _click(page, html: str, program: str) -> tuple[bool, str | None]:
     click as a body attribute.
     """
     await page.set_content(_page_html(html))
-    clicked = bool(await page.evaluate(program))
+    tagged = bool(await page.evaluate(program))
+    # The program only tags its target (Shipsmind fork); the click itself is
+    # real mouse input, through the same helper production uses.
+    from linkedin_mcp_server.core.human_input import click_marked
+
+    mark = "more" if program == OPEN_MORE_BUTTON_JS else "accept"
+    clicked = tagged and await click_marked(page, page.evaluate, mark)
     recorded = await page.evaluate("document.body.getAttribute('data-clicked')")
     return (clicked, recorded)
 

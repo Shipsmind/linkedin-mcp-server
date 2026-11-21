@@ -75,9 +75,7 @@
     },
     {
       "call": "dismiss_job",
-      "kind": "sleep",
-      "reason": "sleep",
-      "seconds": 2.0
+      "kind": "boundary.page_load_pause"
     },
     {
       "call": "dismiss_job",
@@ -186,9 +184,7 @@
     },
     {
       "call": "dismiss_job",
-      "kind": "sleep",
-      "reason": "sleep",
-      "seconds": 2.0
+      "kind": "boundary.page_load_pause"
     },
     {
       "call": "dismiss_job",

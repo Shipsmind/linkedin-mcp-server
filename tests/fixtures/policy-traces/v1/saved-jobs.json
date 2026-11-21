@@ -150,9 +150,7 @@
     },
     {
       "call": "get_saved_jobs",
-      "kind": "sleep",
-      "reason": "sleep",
-      "seconds": 2.0,
+      "kind": "boundary.page_load_pause",
       "section": "saved_jobs"
     },
     {
