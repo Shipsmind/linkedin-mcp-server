@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 from patchright.async_api import Page
 
 from linkedin_mcp_server.config.schema import DEFAULT_TOOL_TIMEOUT_SECONDS
+from linkedin_mcp_server.linkedin.browsing import Browsing
 from linkedin_mcp_server.linkedin.capture import SectionCapture
 from linkedin_mcp_server.linkedin.company import CompanyReader
 from linkedin_mcp_server.linkedin.connection_actions import ConnectionActions
@@ -55,6 +56,7 @@ class LinkedInExtractor:
         self._content = content
         self._capture = capture
         self._feed = FeedReader(session, navigator, content)
+        self._browsing = Browsing(session, navigator)
         self._message_sender = message_sender
         self._person = person
         self._company = CompanyReader(session, capture)
@@ -94,6 +96,18 @@ class LinkedInExtractor:
     ) -> ExtractedSection:
         """Navigate, scroll to load lazy content, and extract innerText."""
         return await self._capture.extract_page(url, section_name, max_scrolls)
+
+    async def browse_feed(self, max_screens: int | None = None) -> dict[str, Any]:
+        """Scroll the home feed for a few screens like a person; reads nothing."""
+        return await self._browsing.browse_feed(max_screens)
+
+    async def glance_page(self, kind: str) -> dict[str, Any]:
+        """Look at My Network or Messaging without clicking anything there."""
+        return await self._browsing.glance_page(kind)
+
+    async def open_profile_via_search(self, name: str, username: str) -> bool:
+        """Open a profile through the global search box; False if not found."""
+        return await self._browsing.open_profile_via_search(name, username)
 
     async def read_person(
         self,

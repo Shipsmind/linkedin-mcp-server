@@ -40,7 +40,11 @@ from linkedin_mcp_server.linkedin.profile_page import ProfilePageReader
 from linkedin_mcp_server.linkedin.session import PageSession
 from linkedin_mcp_server.server import create_mcp_server
 
-from .policy_scenarios import COMPATIBILITY_METHODS, TOOL_FACADE_METHODS
+from .policy_scenarios import (
+    COMPATIBILITY_METHODS,
+    SHIPSMIND_BROWSING_METHODS,
+    TOOL_FACADE_METHODS,
+)
 from .support.policy_trace import ScriptedPage, TraceRecorder
 
 
@@ -96,6 +100,7 @@ async def test_constructor_export_and_dependency_use_the_same_facade(monkeypatch
     constructed = await dependencies.get_ready_extractor(None, tool_name="policy-test")
 
     expected_state = {
+        "_browsing",
         "_capture",
         "_company",
         "_connection",
@@ -535,7 +540,7 @@ async def test_facade_direct_thread_ignores_username_and_index_validation(mock_p
 
 
 def test_facade_methods_are_exactly_the_frozen_coroutine_surface():
-    expected = TOOL_FACADE_METHODS | COMPATIBILITY_METHODS
+    expected = TOOL_FACADE_METHODS | COMPATIBILITY_METHODS | SHIPSMIND_BROWSING_METHODS
     # Enumerate the class, not the expectation: iterating over `expected` would
     # let a newly added public coroutine pass unnoticed.
     actual = {

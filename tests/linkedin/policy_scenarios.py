@@ -1364,6 +1364,8 @@ TOOL_FACADE_METHODS = {
     "reply_to_conversation",
 }
 COMPATIBILITY_METHODS = {"get_page_text", "click_button_by_text"}
+# Shipsmind browsing between outreach steps: called by pm-platform, not MCP tools.
+SHIPSMIND_BROWSING_METHODS = {"browse_feed", "glance_page", "open_profile_via_search"}
 
 
 async def build_policy_traces() -> dict[str, dict[str, Any]]:

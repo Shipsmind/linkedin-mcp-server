@@ -47,6 +47,9 @@ PUBLIC_SIGNATURES = {
     "read_company": "(self, company_name: 'str', requested: 'set[str]', callbacks: 'ProgressCallback | None' = None) -> 'dict[str, Any]'",
     "read_job": "(self, job_id: 'str') -> 'dict[str, Any]'",
     "read_person": "(self, username: 'str', requested: 'set[str]', callbacks: 'ProgressCallback | None' = None, max_scrolls: 'int | None' = None, *, main_profile_already_loaded: 'bool' = False, allow_self_alias: 'bool' = False) -> 'dict[str, Any]'",
+    "browse_feed": "(self, max_screens: 'int | None' = None) -> 'dict[str, Any]'",
+    "glance_page": "(self, kind: 'str') -> 'dict[str, Any]'",
+    "open_profile_via_search": "(self, name: 'str', username: 'str') -> 'bool'",
     "search_companies": "(self, keywords: 'str') -> 'dict[str, Any]'",
     "search_conversations": "(self, keywords: 'str', limit: 'int' = 20) -> 'dict[str, Any]'",
     "archive_conversation": "(self, thread_id: 'str') -> 'dict[str, Any]'",
@@ -75,6 +78,9 @@ DELEGATES = {
     "read_company": ("_company", "read_company"),
     "read_job": ("_jobs", "read_job"),
     "read_person": ("_person", "read_person"),
+    "browse_feed": ("_browsing", "browse_feed"),
+    "glance_page": ("_browsing", "glance_page"),
+    "open_profile_via_search": ("_browsing", "open_profile_via_search"),
     "search_companies": ("_company", "search_companies"),
     "search_conversations": ("_conversations", "search_conversations"),
     "archive_conversation": ("_conversations", "archive_conversation"),
@@ -103,6 +109,9 @@ DELEGATE_CALLS = {
     "read_company": "self._company.read_company(company_name, requested, callbacks)",
     "read_job": "self._jobs.read_job(job_id)",
     "read_person": "self._person.read_person(username, requested, callbacks, max_scrolls, main_profile_already_loaded=main_profile_already_loaded, allow_self_alias=allow_self_alias)",
+    "browse_feed": "self._browsing.browse_feed(max_screens)",
+    "glance_page": "self._browsing.glance_page(kind)",
+    "open_profile_via_search": "self._browsing.open_profile_via_search(name, username)",
     "search_companies": "self._company.search_companies(keywords)",
     "search_conversations": "self._conversations.search_conversations(keywords, limit)",
     "archive_conversation": "self._conversations.archive_conversation(thread_id)",
@@ -114,6 +123,7 @@ DELEGATE_CALLS = {
 }
 
 FACADE_STATE = {
+    "_browsing",
     "_capture",
     "_company",
     "_connection",
