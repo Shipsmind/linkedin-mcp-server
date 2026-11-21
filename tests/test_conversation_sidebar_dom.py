@@ -33,6 +33,8 @@ import json
 from unittest.mock import patch
 
 import pytest
+
+from slow_network import apply_slow_network
 from patchright.async_api import Page, async_playwright
 
 from linkedin_mcp_server.linkedin.content import PageContentReader
@@ -90,6 +92,7 @@ async def dom_page():
         try:
             browser = await p.chromium.launch(channel="chromium", headless=True)
             page = await browser.new_page()
+            await apply_slow_network(page)
         except Exception as exc:  # browser binary missing
             pytest.skip(f"chromium unavailable: {exc}")
         try:
@@ -1219,7 +1222,9 @@ class TestThreadOwnershipAgainstRealDom:
             phased_sidebar([row("A", "late", dest="/messaging/thread/B/")]),
             start=COMPOSE_URL,
         )
-        await install_poll_control(dom_page, release=("A", _row_route_polls()), accelerate=True)
+        await install_poll_control(
+            dom_page, release=("A", _row_route_polls()), accelerate=True
+        )
 
         outcome = await scan(dom_page)
 

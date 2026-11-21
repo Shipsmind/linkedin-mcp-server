@@ -18,6 +18,8 @@ from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import pytest
+
+from slow_network import apply_slow_network
 from patchright.async_api import Page, async_playwright
 
 from linkedin_mcp_server.core.auth import (
@@ -74,6 +76,7 @@ async def dom_page(monkeypatch):
                 channel="chromium", headless=True
             )
             page = await browser.new_page()
+            await apply_slow_network(page)
         except Exception as exc:  # pragma: no cover - environment dependent
             pytest.skip(f"chromium unavailable: {exc}")
         try:

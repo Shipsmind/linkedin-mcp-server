@@ -13,6 +13,8 @@ import os
 from unittest.mock import AsyncMock, patch
 
 import pytest
+
+from slow_network import SLOW_NETWORK, apply_slow_network
 from patchright.async_api import async_playwright
 
 from linkedin_mcp_server.linkedin.message_sender import MessageSender
@@ -202,11 +204,12 @@ async def dom_page():
                 channel="chromium", headless=True
             )
             page = await browser.new_page()
+            await apply_slow_network(page)
         except Exception as exc:
             if os.environ.get("CI"):
                 raise
             pytest.skip(f"chromium unavailable: {exc}")
-        page.set_default_timeout(600)
+        page.set_default_timeout(10_000 if SLOW_NETWORK else 600)
         try:
             yield page
         finally:
