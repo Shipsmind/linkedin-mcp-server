@@ -38,7 +38,9 @@ class TestBrowserConfig:
     def test_defaults(self):
         config = BrowserConfig()
         assert config.headless is True
-        assert config.default_timeout == 5000
+        assert config.default_timeout == 10000
+        assert config.content_timeout == 30000
+        assert config.navigation_timeout == 30000
         assert config.user_data_dir == "~/.linkedin-mcp/profile"
         assert config.login_timeout_seconds == 1800.0
         assert config.login_inline_wait_seconds == 25.0
@@ -1541,6 +1543,28 @@ _CASES: dict[str, _Cases] = {
             ("--timeout", "10"): 10,
             ("--timeout", "0"): EXIT_2,
             ("--timeout", ""): EXIT_2,
+        },
+    ),
+    "CONTENT_TIMEOUT": _Cases(
+        "number",
+        ("browser.content_timeout",),
+        env={None: KEEP, "": KEEP, "0": 0, "45000": 45000, "slow": REFUSED},
+        cli={
+            (): KEEP,
+            ("--content-timeout", "60000"): 60000,
+            ("--content-timeout", "0"): EXIT_2,
+            ("--content-timeout", ""): EXIT_2,
+        },
+    ),
+    "NAVIGATION_TIMEOUT": _Cases(
+        "number",
+        ("browser.navigation_timeout",),
+        env={None: KEEP, "": KEEP, "0": 0, "45000": 45000, "slow": REFUSED},
+        cli={
+            (): KEEP,
+            ("--navigation-timeout", "60000"): 60000,
+            ("--navigation-timeout", "0"): EXIT_2,
+            ("--navigation-timeout", ""): EXIT_2,
         },
     ),
     "TOOL_TIMEOUT": _Cases(
