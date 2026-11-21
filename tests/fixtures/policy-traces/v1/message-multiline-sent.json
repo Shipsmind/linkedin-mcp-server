@@ -76,7 +76,7 @@
       "section": "message",
       "selector": "main",
       "state": "visible",
-      "timeout_ms": null
+      "timeout_ms": 30000
     },
     {
       "arg": null,
@@ -85,7 +85,7 @@
       "operation": "profile_message_target_ready",
       "program_digest": "d156e406f6bb",
       "section": "message",
-      "timeout_ms": 10000
+      "timeout_ms": 30000
     },
     {
       "call": "send_message",
@@ -162,7 +162,7 @@
       "section": "message",
       "selector": "main",
       "state": "visible",
-      "timeout_ms": null
+      "timeout_ms": 30000
     },
     {
       "arg": {
@@ -174,7 +174,7 @@
       "operation": "message_composer_ready",
       "program_digest": "c0ae47ce4773",
       "section": "message",
-      "timeout_ms": null
+      "timeout_ms": 30000
     },
     {
       "arg": {
@@ -594,7 +594,7 @@
       "operation": "message_confirmation_ready",
       "program_digest": "ffb7035dd766",
       "section": "message",
-      "timeout_ms": null
+      "timeout_ms": 30000
     },
     {
       "call": "send_message",

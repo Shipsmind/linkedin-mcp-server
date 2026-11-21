@@ -11,6 +11,8 @@ from typing import Any, cast
 from unittest.mock import patch
 
 import pytest
+
+from slow_network import apply_slow_network
 from patchright.async_api import Page, async_playwright
 
 from linkedin_mcp_server.core.exceptions import OffLinkedInLandingError
@@ -57,6 +59,7 @@ async def dom_page():
         try:
             browser = await p.chromium.launch(channel="chromium", headless=True)
             page = await browser.new_page()
+            await apply_slow_network(page)
         except Exception as exc:  # browser binary missing
             pytest.skip(f"chromium unavailable: {exc}")
         try:
@@ -228,3 +231,39 @@ async def test_escape_reaches_the_dialog_that_has_focus(dom_page):
 
     assert message is not None and "custom notes" in message
     assert await dom_page.locator('[role="dialog"]').count() == 0
+
+
+# A dialog that renders its buttons over time, as on a slow network: the
+# primary (last) button arrives last. A positional click before the count
+# settles would hit "Add a note" or a dismiss button instead of Send.
+HALF_RENDERED_DIALOG = """
+<div role="dialog" id="invite">
+  <button type="button" onclick="document.body.dataset.invite='dismissed'">Dismiss</button>
+</div>
+<script>
+  const dialog = document.getElementById('invite');
+  const add = (label, action) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label;
+    b.onclick = () => {
+      document.body.dataset.invite = action;
+      if (action === 'sent') dialog.remove();
+    };
+    dialog.append(b);
+  };
+  setTimeout(() => add('Add a note', 'note'), 150);
+  setTimeout(() => add('Send without a note', 'sent'), 320);
+</script>
+"""
+
+
+async def test_the_primary_click_waits_for_the_dialog_buttons_to_settle(dom_page):
+    await dom_page.set_content(
+        f"<!DOCTYPE html><html><body>{HALF_RENDERED_DIALOG}</body></html>"
+    )
+
+    clicked = await _actions(dom_page)._click_dialog_primary_button()
+
+    assert clicked is True
+    assert await dom_page.evaluate("document.body.dataset.invite") == "sent"

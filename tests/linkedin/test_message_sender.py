@@ -16,6 +16,8 @@ from patchright.async_api import TimeoutError as PlaywrightTimeoutError
 
 import pytest
 
+from linkedin_mcp_server.core.timeouts import content_ms
+
 from linkedin_mcp_server.core.exceptions import InvalidReferenceError
 from linkedin_mcp_server.linkedin import contracts
 from linkedin_mcp_server.linkedin import message_sender as message_sender_module
@@ -1866,6 +1868,9 @@ class TestMessageConfirmation:
                 "owner": owner,
                 "token": "confirmation-token",
             },
+            # The rest of the send budget (no budget here: the content timeout),
+            # never the short page default.
+            timeout=content_ms(),
         )
 
     @pytest.mark.parametrize(

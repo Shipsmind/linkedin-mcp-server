@@ -76,7 +76,7 @@
       "section": "message",
       "selector": "main",
       "state": "visible",
-      "timeout_ms": null
+      "timeout_ms": 30000
     },
     {
       "arg": {
@@ -87,7 +87,7 @@
       "operation": "message_composer_ready",
       "program_digest": "c0ae47ce4773",
       "section": "message",
-      "timeout_ms": null
+      "timeout_ms": 30000
     },
     {
       "arg": {
