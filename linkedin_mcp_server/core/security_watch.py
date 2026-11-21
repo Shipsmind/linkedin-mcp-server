@@ -135,6 +135,12 @@ class Tripwire:
         detail: str = "",
         status: int | None = None,
     ) -> None:
+        if _PERSON_SIGNING_IN:
+            # The person is signing in by hand (--login): their own checks,
+            # 2FA and "Sign in with Google" pages are theirs to pass. Logged,
+            # never a stop.
+            emit("sign_in_signal_ignored", rule=rule, url=url[:500], severity=severity)
+            return
         with self._lock:
             if self._signal is not None and not (
                 self._signal.severity == WARNING and severity == CHECK
@@ -182,6 +188,23 @@ class Tripwire:
 
 
 TRIPWIRE = Tripwire()
+
+# Set only by the --login process, where a person signs in by hand. The watch
+# guards the automation's own input; during the person's sign-in, leaving
+# LinkedIn for Google's sign-in or meeting a check is expected, not a stop
+# (2026-11-21: the watch tripped on accounts.google.com during a real sign-in).
+_PERSON_SIGNING_IN = False
+
+
+def begin_person_sign_in() -> None:
+    """Mark this process as the person's own sign-in: no watch, no tripwire."""
+    global _PERSON_SIGNING_IN
+    _PERSON_SIGNING_IN = True
+    TRIPWIRE.reset()
+
+
+def person_signing_in() -> bool:
+    return _PERSON_SIGNING_IN
 
 
 def raise_if_tripped() -> None:
@@ -510,6 +533,8 @@ def set_active_page(page: Any) -> None:
 
 async def install_security_watch(context: Any, page: Any | None = None) -> None:
     """Install the watch once on *context* (and its current and future pages)."""
+    if _PERSON_SIGNING_IN:
+        return
     cookie = await _session_cookie_value(context)
     signed_in = bool(cookie)
     if signed_in:
@@ -602,6 +627,8 @@ async def _check_session_cookie(page: Any) -> None:
 
 
 def reset_watch_for_testing() -> None:
+    global _PERSON_SIGNING_IN
+    _PERSON_SIGNING_IN = False
     TRIPWIRE.reset()
     _installed_contexts.clear()
     _signed_in_contexts.clear()
