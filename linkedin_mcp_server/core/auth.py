@@ -12,6 +12,11 @@ from patchright.async_api import (
 )
 
 from .destination import is_linkedin_landing, linkedin_element
+from .security_watch import (
+    TRIPWIRE,
+    is_security_check_url,
+    raise_if_security_check_url,
+)
 from .exceptions import (
     AccountRestrictedError,
     AuthenticationError,
@@ -71,6 +76,7 @@ async def is_logged_in(page: Page) -> bool:
         AccountRestrictedError: On LinkedIn's account-restriction route.
     """
     _raise_if_account_restricted(page.url)
+    raise_if_security_check_url(page.url)
     try:
         current_url = page.url
 
@@ -149,6 +155,9 @@ async def _detect_auth_barrier(
     # of the blocker routes, which the bare /login/login-restriction/ also
     # matches.
     _raise_if_account_restricted(page.url)
+    # A checkpoint or captcha is a security check for a person to clear, not
+    # a sign-in: answering it with a login window would retire a valid session.
+    raise_if_security_check_url(page.url)
     if _is_auth_blocker_url(page.url):
         return f"auth blocker URL: {page.url}"
 
@@ -231,6 +240,8 @@ async def resolve_remember_me_prompt(page: Page, *, timeout: int | None = None) 
     ``timeout`` bounds the whole attempt in milliseconds. ``None`` retains the
     normal per-operation limits.
     """
+    if TRIPWIRE.tripped() or is_security_check_url(getattr(page, "url", "")):
+        return False
     deadline = None
     loop = None
     if timeout is not None:
@@ -365,6 +376,7 @@ def raise_if_auth_route(url: str) -> None:
     if not is_linkedin_landing(url):
         return
     _raise_if_account_restricted(url)
+    raise_if_security_check_url(url)
     if _is_auth_blocker_url(url):
         logger.warning("Authentication barrier detected on %s", url)
         raise AuthenticationError(

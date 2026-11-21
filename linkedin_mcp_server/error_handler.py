@@ -31,6 +31,7 @@ from linkedin_mcp_server.core.exceptions import (
     ProfileNotFoundError,
     ProxyConnectionError,
     RateLimitError,
+    SecurityCheckError,
 )
 
 from linkedin_mcp_server.exceptions import (
@@ -70,6 +71,8 @@ class ErrorCode(StrEnum):
 
     AUTH_REQUIRED = "auth_required"
     ACCOUNT_RESTRICTED = "account_restricted"
+    #: LinkedIn showed a security check; a person must clear it (Shipsmind).
+    SECURITY_CHECK = "security_check"
     RATE_LIMITED = "rate_limited"
     NOT_FOUND = "not_found"
     PAGE_UNREADABLE = "page_unreadable"
@@ -385,6 +388,10 @@ def _shape_tool_error(exception: Exception, context: str = "") -> NoReturn:
     # Diagnostics-free, following BrowserDowngradeError: LinkedIn's decision
     # about the account is not a bug, and the message already names the only
     # way out.
+    elif isinstance(exception, SecurityCheckError):
+        logger.warning("Security check%s: %s", ctx, exception)
+        raise CodedToolError(str(exception), ErrorCode.SECURITY_CHECK) from exception
+
     elif isinstance(exception, AccountRestrictedError):
         logger.warning("LinkedIn account restricted%s", ctx)
         raise CodedToolError(

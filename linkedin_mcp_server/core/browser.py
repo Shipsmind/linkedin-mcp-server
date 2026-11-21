@@ -43,6 +43,7 @@ from linkedin_mcp_server.process_tree import (
 )
 
 from .exceptions import NetworkError, ProxyConnectionError
+from .security_watch import install_security_watch
 from .throttle import watch_responses
 
 logger = logging.getLogger(__name__)
@@ -581,6 +582,9 @@ class BrowserManager:
             # gone, and the first navigation is the one that most often
             # arrives throttled.
             watch_responses(self._page)
+            # Always-on security watch: responses, frames and a DOM observer
+            # trip a process-wide stop before LinkedIn escalates (Shipsmind).
+            await install_security_watch(self._context, self._page)
 
             logger.info("Browser context and page ready")
 
