@@ -13,6 +13,9 @@ from pathlib import Path
 # import, and inherited by every process a test starts. CI sets it before
 # Python starts as well; `test_fastmcp_compatibility.py` checks it took effect.
 os.environ["FASTMCP_MCP_CAMELCASE_COMPAT"] = "false"
+# Human pacing waits are seconds long; the suite runs them at zero while
+# still producing every input event (Shipsmind fork).
+os.environ["LINKEDIN_HUMAN_PACING"] = "0"
 
 import pytest  # noqa: E402
 
@@ -28,6 +31,8 @@ def reset_singletons():
     from linkedin_mcp_server.bootstrap import reset_bootstrap_for_testing
     from linkedin_mcp_server.config import reset_config
     from linkedin_mcp_server.core.throttle import reset_throttle_record
+    from linkedin_mcp_server.core.security_watch import reset_watch_for_testing
+    from linkedin_mcp_server.core.human_input import HumanPacer, set_pacer_for_testing
     from linkedin_mcp_server.daemon.descriptor import (
         reset_daemon_descriptor_for_testing,
     )
@@ -54,6 +59,10 @@ def reset_singletons():
     # next test's failure otherwise: the record is process state, and the
     # middleware that clears it per call runs in almost none of these tests.
     reset_throttle_record()
+    # The security tripwire and the pacer are process state too: a check one
+    # test tripped would stop every later test's input.
+    reset_watch_for_testing()
+    set_pacer_for_testing(HumanPacer(enabled=False))
     # Every test that builds a server records a role, and the auth gates read it
     # from process state. Left standing, one OWNER would refuse logins in every
     # test after it, in a suite where most never mention a role.

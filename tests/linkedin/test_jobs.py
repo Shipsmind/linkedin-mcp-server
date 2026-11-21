@@ -8,6 +8,8 @@ from urllib.parse import parse_qs, urlparse
 import asyncio
 
 import pytest
+
+from linkedin_mcp_server.core.exceptions import SecurityCheckError
 from patchright.async_api import Error as PatchrightError
 from patchright.async_api import TimeoutError as PlaywrightTimeoutError
 
@@ -367,6 +369,22 @@ class TestGetEasyApplyForm:
 
 class TestSearchJobs:
     """Tests for search_jobs with job ID extraction and pagination."""
+
+    @pytest.fixture(autouse=True)
+    def _two_second_prediction_bound(self, monkeypatch):
+        # The budget arithmetic in this class was written against a 2 s gap.
+        # The prediction logic is unchanged; only its bound is now the longest
+        # human page pause (Shipsmind fork), which this pins back for the maths.
+        import linkedin_mcp_server.linkedin.jobs as jobs_module
+
+        monkeypatch.setattr(jobs_module, "NAV_DELAY", 2.0)
+
+        async def pause_through_module_sleep():
+            await jobs_module.asyncio.sleep(jobs_module.NAV_DELAY)
+
+        monkeypatch.setattr(
+            jobs_module.human_input, "page_load_pause", pause_through_module_sleep
+        )
 
     @pytest.fixture(autouse=True)
     def _set_search_url(self, mock_page):
@@ -3266,7 +3284,7 @@ class TestGetSavedJobs:
                 "linkedin_mcp_server.linkedin.job_pages.scroll_to_bottom",
                 side_effect=redirect,
             ),
-            pytest.raises(AuthenticationError, match="--login"),
+            pytest.raises(SecurityCheckError),  # a checkpoint waits for a person
         ):
             await reader.get_saved_jobs(max_pages=1)
 

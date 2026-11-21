@@ -10,6 +10,7 @@ from typing import Any, cast
 from unittest.mock import patch
 
 import asyncio
+import random
 import inspect
 import json
 
@@ -45,6 +46,8 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] | None = None
 _COMMON_ALLOWED = {
     "boundary.auth",
     "boundary.auth_quick",
+    "boundary.action_pause",
+    "boundary.page_load_pause",
     "boundary.drain",
     "boundary.modal",
     "boundary.rate_limit",
@@ -61,6 +64,7 @@ _COMMON_ALLOWED = {
     "handle.dispose",
     "handle.evaluate",
     "handle.json_value",
+    "keyboard.insert_text",
     "keyboard.press",
     "keyboard.type",
     "listener.add",
@@ -68,6 +72,8 @@ _COMMON_ALLOWED = {
     "listener.remove",
     "locator.click",
     "locator.count",
+    "locator.get_attribute",
+    "locator.press",
     "locator.create",
     "locator.derive",
     "locator.is_visible",
@@ -191,7 +197,27 @@ async def boundaries(
             "context": values.get("context"),
         }
 
+    async def page_load_pause() -> float:
+        # A person's random pause before the next page (Shipsmind fork): the
+        # trace records where it happens, the clock a fixed stand-in length.
+        recorder.record("boundary.page_load_pause")
+        clock.advance(30.0)
+        return 30.0
+
+    async def action_pause() -> float:
+        recorder.record("boundary.action_pause")
+        clock.advance(10.0)
+        return 10.0
+
+    from linkedin_mcp_server.core import human_input as human_input_module
+
+    human_input_module.set_pacer_for_testing(
+        human_input_module.HumanPacer(rng=random.Random(0), enabled=False)
+    )
+
     with (
+        patch.object(human_input_module, "page_load_pause", page_load_pause),
+        patch.object(human_input_module, "action_pause", action_pause),
         patch.object(navigation_module, "record_page_trace", trace),
         patch.object(navigation_module, "detect_auth_barrier_quick", auth_quick),
         patch.object(navigation_module, "detect_auth_barrier", auth),
@@ -659,8 +685,28 @@ def _script_message_surface(
 
 def _script_message_owner(page: ScriptedPage, *, write: str = "written") -> None:
     page.script("evaluate_handle:message_composer_owner", True)
-    page.script("handle-1.evaluate:message_composer_write", write)
+    if write == "written":
+        # The script tags the editor; the message is typed with real keys into
+        # it; a second script confirms the editor holds exactly the message.
+        page.script("handle-1.evaluate:message_composer_write", "ready")
+        page.declare_locator('[data-shipsmind-click="composer"]', "composer_editor")
+        page.declare_derived("composer_editor", "first", "composer_editor.first")
+        page.script("composer_editor.first.click", None)
+        page.script_always("handle-1.evaluate:message_composer_focused", True)
+        page.script("handle-1.evaluate:message_composer_confirm", "written")
+    else:
+        page.script("handle-1.evaluate:message_composer_write", write)
     page.script("handle-1.evaluate:message_composer_dispose", None)
+
+
+def _script_submit_click(page: ScriptedPage) -> None:
+    """The submit script tags the button; a real mouse click sends."""
+    page.script("handle-1.evaluate:message_submit", "tagged")
+    page.declare_locator('[data-shipsmind-click="send"]', "send_button")
+    page.declare_derived("send_button", "first", "send_button.first")
+    page.script("send_button.count", 1)
+    page.script("send_button.first.click", None)
+    page.script("evaluate:click_mark_cleanup", True)
 
 
 def _script_confirmation_cleanup(page: ScriptedPage) -> None:
@@ -785,7 +831,7 @@ async def _messaging_submission_scenario(
             )
             _script_confirmation_cleanup(page)
         else:
-            page.script("handle-1.evaluate:message_submit", "clicked")
+            _script_submit_click(page)
             page.script(
                 "wait_for_function:message_confirmation_ready",
                 {"path": "/messaging/thread/2-policy-thread==/"}
@@ -815,7 +861,7 @@ async def _messaging_cancellation_scenario() -> dict[str, Any]:
     _script_message_owner(page)
     page.script("handle-1.evaluate:message_submit_ready", "ready")
     page.script("evaluate:message_confirmation_prepare", "confirmation-1")
-    page.script("handle-1.evaluate:message_submit", "clicked")
+    _script_submit_click(page)
     page.script(
         "wait_for_function:message_confirmation_ready", asyncio.CancelledError()
     )
@@ -889,7 +935,7 @@ async def _reply_scenario(outcome: str) -> dict[str, Any]:
         _script_message_owner(page)
         page.script("handle-1.evaluate:message_submit_ready", "ready")
         page.script("evaluate:message_confirmation_prepare", "confirmation-1")
-        page.script("handle-1.evaluate:message_submit", "clicked")
+        _script_submit_click(page)
         page.script(
             "wait_for_function:message_confirmation_ready",
             {"path": "/messaging/thread/2-policy-thread==/"},
@@ -1094,7 +1140,10 @@ async def _conversation_scenario(method: str) -> dict[str, Any]:
     page = _page(recorder)
     if method != "search_conversations":
         scrolls = 3 if method == "get_conversation" else 1
-        page.script("evaluate:scroll_main_region", *([True] * scrolls))
+        page.script(
+            "evaluate:scroll_main_region",
+            *([_REGION_BOX, _REGION_AT_EDGE] * scrolls),
+        )
     page.script("evaluate:root_content", _root("Conversation content"))
     if method != "get_conversation":
         page.script(
@@ -1191,12 +1240,25 @@ async def _archive_conversation_scenario(*, already: bool) -> dict[str, Any]:
     )
 
 
-ROW_CLICK_STOPPED_OUTCOME = {
+_REGION_BOX = {"x": 100, "y": 120, "width": 400, "height": 600}
+# The same region once the wheel reached its edge (either end).
+_REGION_AT_EDGE = {**_REGION_BOX, "atTop": True, "atBottom": True}
+
+ROW_CLICK_LISTING = {
     "rows": [
-        {"ariaLabel": "Select conversation with Ada Lovelace", "threadId": "2-ada"}
+        {
+            "ariaLabel": "Select conversation with Ada Lovelace",
+            "position": 0,
+            "clickable": True,
+            "filtered": False,
+        },
+        {
+            "ariaLabel": "Select conversation with Bob Stall",
+            "position": 1,
+            "clickable": True,
+            "filtered": False,
+        },
     ],
-    "stoppedAt": {"ariaLabel": "Select conversation with Bob Stall", "position": 1},
-    "firstIndexGap": None,
     "startThreadId": None,
 }
 
@@ -1211,10 +1273,27 @@ async def _conversation_row_resolution_scenario() -> dict[str, Any]:
     recorder = TraceRecorder(name, _COMMON_ALLOWED)
     clock = FakeClock(recorder)
     page = _page(recorder)
-    page.script("evaluate:scroll_main_region", True, True)
+    page.script(
+        "evaluate:scroll_main_region",
+        *([_REGION_BOX, _REGION_AT_EDGE] * 2),
+    )
     page.script("evaluate:root_content", _root("Conversation content"))
     page.script("wait_for_selector:conversation_rows", None)
-    page.script("evaluate:conversation_thread_refs", ROW_CLICK_STOPPED_OUTCOME)
+    page.script("evaluate:conversation_thread_refs", ROW_CLICK_LISTING)
+    # Row 0 opens 2-ada; row 1's click never moves the page, which stops the scan.
+    page.declare_locator("main li label[aria-label]", "row_labels")
+    for i, name in enumerate(("Ada Lovelace", "Bob Stall")):
+        page.declare_derived("row_labels", f"nth:{i}", f"row_label_{i}")
+        page.declare_locator(
+            "xpath=ancestor::li[1]", f"row_{i}", parent=f"row_label_{i}"
+        )
+        page.declare_locator(
+            'div[class*="listitem__link"]', f"row_link_{i}", parent=f"row_{i}"
+        )
+        page.declare_derived(f"row_link_{i}", "first", f"row_link_{i}.first")
+        page.script(f"row_label_{i}.get_attribute", f"Select conversation with {name}")
+        page.script(f"row_link_{i}.first.click", None)
+    page.script("evaluate:thread_id", None, *(["2-ada"] * 2), *(["2-ada"] * 12))
     extractor = _extractor(page)
     async with boundaries(recorder, clock):
         with recorder.context("get_inbox", "conversation"):

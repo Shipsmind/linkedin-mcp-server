@@ -32,6 +32,20 @@ def mock_page():
     # recording looking correct here however broken it was.
     page.main_frame = SimpleNamespace(url=page.url)
     page.wait_for_load_state = AsyncMock()
+    # Real input devices (Shipsmind fork): every click, scroll and key now
+    # goes through page.mouse / page.keyboard with human pacing.
+    page.mouse = SimpleNamespace(
+        move=AsyncMock(),
+        down=AsyncMock(),
+        up=AsyncMock(),
+        wheel=AsyncMock(),
+        click=AsyncMock(),
+    )
+    page.keyboard = SimpleNamespace(
+        type=AsyncMock(), press=AsyncMock(), insert_text=AsyncMock()
+    )
+    page.viewport_size = {"width": 1280, "height": 800}
+    page.frames = []
     # Real listeners, so that a double can navigate the way the browser does.
     # A reload leaves `page.url` untouched, so the event is the only thing that
     # says the document was replaced, and a double that only assigns the URL

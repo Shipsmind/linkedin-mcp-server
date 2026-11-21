@@ -9,6 +9,8 @@ import time
 
 import anyio
 import pytest
+
+from linkedin_mcp_server.core.exceptions import SecurityCheckError
 from patchright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from linkedin_mcp_server.core.exceptions import AuthenticationError
@@ -47,6 +49,20 @@ def extracted(
 
 
 class TestExtractSearchPage:
+    @pytest.fixture(autouse=True)
+    def _retry_pause_through_module_sleep(self, monkeypatch):
+        # The retry now takes a random page-load pause (Shipsmind fork). These
+        # tests count and clock it through job_pages' asyncio.sleep, so route
+        # the pause there with the old figure for the arithmetic.
+        import linkedin_mcp_server.linkedin.job_pages as pages_module
+
+        async def pause_through_module_sleep():
+            await pages_module.asyncio.sleep(pages_module.RATE_LIMIT_RETRY_DELAY)
+
+        monkeypatch.setattr(
+            pages_module.human_input, "page_load_pause", pause_through_module_sleep
+        )
+
     async def test_extract_search_page_raises_auth_error_for_login_barrier(
         self, mock_page
     ):
@@ -257,7 +273,7 @@ class TestExtractSearchPage:
                 new_callable=AsyncMock,
                 side_effect=navigate_away,
             ),
-            pytest.raises(AuthenticationError, match="--login"),
+            pytest.raises(SecurityCheckError),  # a checkpoint waits for a person
         ):
             await reader._extract_search_page(
                 "https://www.linkedin.com/jobs/search/?keywords=test",
@@ -685,7 +701,7 @@ class TestExtractSearchPage:
                 "linkedin_mcp_server.linkedin.job_pages.scroll_job_sidebar",
                 side_effect=hop_twice,
             ),
-            pytest.raises(AuthenticationError, match="--login"),
+            pytest.raises(SecurityCheckError),  # a checkpoint waits for a person
         ):
             await reader._extract_search_page(
                 "https://www.linkedin.com/jobs/search/?keywords=test",
@@ -727,7 +743,7 @@ class TestExtractSearchPage:
                 "linkedin_mcp_server.linkedin.job_pages.scroll_job_sidebar",
                 side_effect=hop_slowly,
             ),
-            pytest.raises(AuthenticationError, match="--login"),
+            pytest.raises(SecurityCheckError),  # a checkpoint waits for a person
         ):
             await reader._extract_search_page(
                 "https://www.linkedin.com/jobs/search/?keywords=test",
@@ -772,7 +788,7 @@ class TestExtractSearchPage:
                 "linkedin_mcp_server.linkedin.job_pages.scroll_job_sidebar",
                 side_effect=hop_late,
             ),
-            pytest.raises(AuthenticationError, match="--login"),
+            pytest.raises(SecurityCheckError),  # a checkpoint waits for a person
         ):
             await reader._extract_search_page(
                 "https://www.linkedin.com/jobs/search/?keywords=test",
@@ -980,7 +996,7 @@ class TestExtractSearchPage:
                 "linkedin_mcp_server.linkedin.job_pages.scroll_job_sidebar",
                 side_effect=scroll_then_publish,
             ),
-            pytest.raises(AuthenticationError, match="--login"),
+            pytest.raises(SecurityCheckError),  # a checkpoint waits for a person
         ):
             await reader._extract_search_page(
                 "https://www.linkedin.com/jobs/search/?keywords=python",

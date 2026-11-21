@@ -1103,7 +1103,11 @@ class TestComposerRecipientDom:
         assert result["sent"] is False
         assert result["retry_safe"] is True
         assert await dom_page.evaluate("document.body.dataset.clicked") is None
-        assert await dom_page.evaluate("document.body.dataset.inputCount") == "2"
+        # One input event per typed key (the message is typed like a person,
+        # Shipsmind fork), then one for the cleanup that removes it.
+        assert await dom_page.evaluate("document.body.dataset.inputCount") == str(
+            len(MESSAGE) + 1
+        )
         assert (await dom_page.locator("#composer").inner_text()).strip() == ""
 
     @pytest.mark.parametrize(

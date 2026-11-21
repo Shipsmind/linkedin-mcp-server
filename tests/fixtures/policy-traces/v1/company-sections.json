@@ -109,9 +109,7 @@
     },
     {
       "call": "read_company",
-      "kind": "sleep",
-      "reason": "sleep",
-      "seconds": 2.0
+      "kind": "boundary.page_load_pause"
     },
     {
       "call": "read_company",
@@ -213,9 +211,7 @@
     },
     {
       "call": "read_company",
-      "kind": "sleep",
-      "reason": "sleep",
-      "seconds": 2.0
+      "kind": "boundary.page_load_pause"
     },
     {
       "call": "read_company",

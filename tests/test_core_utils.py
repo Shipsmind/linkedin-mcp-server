@@ -28,15 +28,20 @@ def mock_page():
 class TestDetectRateLimit:
     @pytest.mark.parametrize(
         "url",
-        [
-            "https://www.linkedin.com/checkpoint/challenge/123",
-            "https://www.linkedin.com/authwall?trk=login",
-        ],
+        ["https://www.linkedin.com/authwall?trk=login"],
     )
     async def test_challenge_url_needs_login(self, mock_page, url):
         """Waiting clears no challenge, so it must not read as a rate limit."""
         mock_page.url = url
         with pytest.raises(AuthenticationError, match="--login"):
+            await detect_rate_limit(mock_page)
+
+    async def test_a_checkpoint_is_a_security_check_for_a_person(self, mock_page):
+        """Not a sign-in: the session stays, and a person clears the check."""
+        from linkedin_mcp_server.core.exceptions import SecurityCheckError
+
+        mock_page.url = "https://www.linkedin.com/checkpoint/challenge/123"
+        with pytest.raises(SecurityCheckError):
             await detect_rate_limit(mock_page)
 
     @pytest.mark.parametrize(

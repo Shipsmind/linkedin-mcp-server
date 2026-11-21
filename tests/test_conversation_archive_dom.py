@@ -184,7 +184,6 @@ async def dom_page():
 def _short_waits(monkeypatch):
     monkeypatch.setattr(conversations, "_THREAD_READY_TIMEOUT", 1.0)
     monkeypatch.setattr(conversations, "_THREAD_MENU_TIMEOUT", 1.0)
-    monkeypatch.setattr(conversations, "NAV_DELAY", 0.0)
 
 
 async def _no_message_target() -> Any:
