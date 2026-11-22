@@ -437,6 +437,7 @@ async def _dismiss_job_scenario() -> dict[str, Any]:
     page.goto_landings.extend([posting, search, search])
     page.script("title", "LinkedIn", "(3) Applied AI Engineer | Acme | LinkedIn")
     page.declare_locator("button[data-mcp-dismiss]", "search_card_dismiss")
+    page.declare_derived("search_card_dismiss", "first", "search_card_dismiss.first")
     page.script(
         "evaluate:job_search_card",
         {"cards": 25, "matches": 1, "dismiss": 1, "undo": 0},
@@ -446,7 +447,7 @@ async def _dismiss_job_scenario() -> dict[str, Any]:
         {"cards": 24, "matches": 0, "dismiss": 0, "undo": 0},
         {"cards": 24, "matches": 0, "dismiss": 0, "undo": 0},
     )
-    page.script("search_card_dismiss.click", None)
+    page.script("search_card_dismiss.first.click", None)
     extractor = _extractor(page)
     arguments = {"job_id": "123"}
     async with boundaries(recorder, clock):

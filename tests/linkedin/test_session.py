@@ -67,9 +67,10 @@ async def test_scroll_sidebar_delegates_every_utility_default(mock_page, monkeyp
 
     scroll.assert_awaited_once_with(
         mock_page,
-        settle_timeout=3.0,
+        # Resolved by the utility from the configured deadlines (Shipsmind fork).
+        settle_timeout=None,
         poll_interval=0.15,
         min_budget=0.4,
         max_scrolls=10,
-        deadline=12.0,
+        deadline=None,
     )

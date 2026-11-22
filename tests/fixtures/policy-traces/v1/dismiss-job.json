@@ -157,7 +157,7 @@
       "operation": "job_search_cards",
       "selector": "li[data-occludable-job-id], [componentkey^=\"job-card-component-ref-\"]",
       "state": "attached",
-      "timeout_ms": 10000
+      "timeout_ms": 30000
     },
     {
       "arg": {
@@ -178,9 +178,16 @@
     },
     {
       "call": "dismiss_job",
+      "kind": "locator.derive",
+      "locator": "search_card_dismiss.first",
+      "operation": "first",
+      "parent": "search_card_dismiss"
+    },
+    {
+      "call": "dismiss_job",
       "kind": "locator.click",
-      "locator": "search_card_dismiss",
-      "timeout_ms": 5000
+      "locator": "search_card_dismiss.first",
+      "timeout_ms": null
     },
     {
       "call": "dismiss_job",
@@ -274,7 +281,7 @@
       "operation": "job_search_cards",
       "selector": "li[data-occludable-job-id], [componentkey^=\"job-card-component-ref-\"]",
       "state": "attached",
-      "timeout_ms": 10000
+      "timeout_ms": 30000
     },
     {
       "arg": {
@@ -295,7 +302,7 @@
       "min_budget": 0.4,
       "moved": false,
       "poll_interval": 0.15,
-      "settle_timeout": 3.0
+      "settle_timeout": null
     },
     {
       "arg": {

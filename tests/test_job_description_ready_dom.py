@@ -12,6 +12,8 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+
+from slow_network import apply_slow_network
 from patchright.async_api import async_playwright
 
 from linkedin_mcp_server.linkedin.text import JOB_POSTING_EN_US
@@ -33,6 +35,7 @@ async def dom_page():
         try:
             browser = await p.chromium.launch(channel="chromium", headless=True)
             page = await browser.new_page()
+            await apply_slow_network(page)
         except Exception as exc:  # browser binary missing
             pytest.skip(f"chromium unavailable: {exc}")
         try:

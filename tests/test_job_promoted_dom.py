@@ -14,6 +14,8 @@ Skipped automatically when chromium is not installed; run locally after
 from __future__ import annotations
 
 import pytest
+
+from slow_network import apply_slow_network
 from patchright.async_api import async_playwright
 
 from linkedin_mcp_server.linkedin.content import PageContentReader
@@ -35,6 +37,7 @@ async def dom_page():
                 channel="chromium", headless=True
             )
             page = await browser.new_page()
+            await apply_slow_network(page)
         except Exception as exc:  # pragma: no cover - environment dependent
             pytest.skip(f"chromium unavailable: {exc}")
         try:

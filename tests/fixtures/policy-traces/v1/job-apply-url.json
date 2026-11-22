@@ -86,7 +86,7 @@
       "kind": "wait_for_function",
       "operation": "job_apply_ready",
       "program_digest": "2cae90d1455d",
-      "timeout_ms": 10000.0
+      "timeout_ms": 30000.0
     },
     {
       "arg": {

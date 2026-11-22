@@ -154,3 +154,11 @@ async def test_an_empty_page_is_not_ready_and_the_wait_ends_at_its_deadline(real
     started = time.monotonic()
     assert not await PageSession(real_page).wait_page_ready("main", timeout=600)
     assert time.monotonic() - started < 5
+
+
+def test_the_job_sidebar_waits_grow_with_the_configured_deadlines():
+    from linkedin_mcp_server.linkedin.job_pages import _secs
+
+    set_timeouts_for_testing(content=30_000, control=10_000)
+    assert _secs(5.0, 10_000) == 10.0  # never shorter than the configured one
+    assert _secs(12.0, 10_000) == 12.0  # never shorter than what it replaced
