@@ -31,6 +31,18 @@ PREMIUM_MESSAGE = (
 )
 
 
+@pytest.fixture(autouse=True)
+def _relationship_state_arrives_at_once(monkeypatch):
+    """The top-card state wait (an event wait) is tested on its own in
+    tests/test_event_driven_waits.py; here it reports the state as arrived so
+    the scripted top-card reads stay the ones each case is about."""
+
+    async def arrived(self, username, wanted):
+        return True
+
+    monkeypatch.setattr(ConnectionActions, "_wait_for_relationship_state", arrived)
+
+
 def _actions(page, read_main_profile: Any = None) -> ConnectionActions:
     """Wire the connection owner the way the facade does.
 
@@ -769,7 +781,9 @@ class TestConnectWithPerson:
             result = await actions.connect_with_person("testuser")
 
         assert result["status"] == "accepted"
-        mock_sleep.assert_awaited_once()
+        # Each verification attempt waits for the top card's state, then takes
+        # a person's pause before re-reading: two attempts, two pauses.
+        assert mock_sleep.await_count == 2
 
     async def test_returns_unavailable_when_no_signals_and_text(self, mock_page):
         """No structural signals, no actionable text → connect_unavailable."""

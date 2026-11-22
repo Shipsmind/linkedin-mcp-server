@@ -214,6 +214,11 @@ async def boundaries(
     human_input_module.set_pacer_for_testing(
         human_input_module.HumanPacer(rng=random.Random(0), enabled=False)
     )
+    # Traces record each wait's deadline: pin the production ones, so a trace
+    # is the same from the checker script and from inside the test suite.
+    from linkedin_mcp_server.core.timeouts import set_timeouts_for_testing
+
+    set_timeouts_for_testing(content=30_000, control=10_000, navigation=30_000)
 
     with (
         patch.object(human_input_module, "page_load_pause", page_load_pause),

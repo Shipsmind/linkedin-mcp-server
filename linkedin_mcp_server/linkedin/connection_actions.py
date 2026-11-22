@@ -29,6 +29,7 @@ from urllib.parse import quote_plus
 
 import asyncio  # noqa: F401 - tests patch <module>.asyncio.sleep
 import logging
+import time
 
 from patchright.async_api import TimeoutError as PlaywrightTimeoutError
 
@@ -50,6 +51,7 @@ from linkedin_mcp_server.linkedin.identifiers import (
 )
 from linkedin_mcp_server.linkedin.navigation import PageNavigator
 from linkedin_mcp_server.core import human_input
+from linkedin_mcp_server.core.timeouts import content_ms, control_ms
 from linkedin_mcp_server.linkedin.session import PageSession
 
 logger = logging.getLogger(__name__)
@@ -289,6 +291,22 @@ CLICK_INCOMING_ACCEPT_JS = (
 )
 
 
+# Holds once the dialog's button count has not changed for a quarter second.
+_DIALOG_BUTTONS_STABLE_JS = r"""(selector) => {
+    const count = document.querySelectorAll(selector).length;
+    const now = performance.now();
+    const seen = window.__shipsmindDialogButtons;
+    if (!seen || seen.count !== count) {
+        window.__shipsmindDialogButtons = { count, since: now };
+        return false;
+    }
+    return count > 0 && now - seen.since >= 250;
+}"""
+
+# How often the top card is re-read while waiting for a relationship change.
+_STATE_POLL_SECONDS = 0.5
+
+
 def _connection_result(
     url: str,
     status: str,
@@ -347,6 +365,41 @@ class ConnectionActions:
         self._navigator = navigator
         self._read_main_profile = read_main_profile
 
+    async def _dialog_closes(self) -> bool:
+        """Whether the open dialog goes away (a sent invite), by event."""
+        try:
+            await self._session.page.wait_for_selector(
+                _DIALOG_SELECTOR, state="hidden", timeout=control_ms()
+            )
+            return True
+        except PlaywrightTimeoutError:
+            return False
+
+    async def _wait_for_relationship_state(
+        self, username: str, wanted: tuple[str, ...]
+    ) -> bool:
+        """Read the top card until its relationship state is one of *wanted*.
+
+        LinkedIn applies an accepted or sent invitation asynchronously; this
+        waits for the page to show it instead of guessing a time. Read-only,
+        polled like Playwright's own predicates, bounded by the content
+        timeout. Answers whether the state arrived; the caller verifies.
+        """
+        deadline = time.monotonic() + content_ms() / 1000
+        while True:
+            try:
+                signals = await self._read_action_signals(username)
+                if connection.detect_connection_state(signals) in wanted:
+                    return True
+            except (OffLinkedInLandingError, SecurityCheckError, RateLimitError):
+                raise
+            except Exception:  # noqa: BLE001 - the page re-rendering under the read
+                logger.debug("Top card state not readable yet", exc_info=True)
+            if time.monotonic() >= deadline:
+                return False
+            # Polling the page, not human pacing.
+            await self._session.delay(_STATE_POLL_SECONDS)
+
     async def _dialog_is_open(self, *, timeout: int = 1000) -> bool:
         """Return whether a dialog is currently open (structural check)."""
         locator = self._session.page.locator(_DIALOG_SELECTOR)
@@ -358,13 +411,33 @@ class ConnectionActions:
         except Exception:
             return False
 
-    async def _click_dialog_primary_button(self, *, timeout: int = 5000) -> bool:
+    async def _wait_for_dialog_buttons_stable(self) -> bool:
+        """Wait until the open dialog's buttons stop changing (count steady).
+
+        The primary and "Add a note" buttons are chosen by position, so a click
+        on a half-rendered dialog would hit the wrong one. Event-driven: the
+        predicate runs on animation frames and holds once the count has not
+        changed for a quarter second. Bounded by the control timeout.
+        """
+        try:
+            await self._session.page.wait_for_function(
+                _DIALOG_BUTTONS_STABLE_JS,
+                arg=f"{_DIALOG_SELECTOR} button, {_DIALOG_SELECTOR} [role='button']",
+                timeout=control_ms(),
+            )
+            return True
+        except Exception:  # noqa: BLE001 - the caller's own checks decide
+            logger.debug("Dialog buttons did not settle", exc_info=True)
+            return False
+
+    async def _click_dialog_primary_button(self, *, timeout: int | None = None) -> bool:
         """Click the last (primary/Send) button in the open dialog.
 
         LinkedIn consistently places the primary action as the last button.
         Returns False (rather than raising) when the click is intercepted or
         times out, so callers can fall back to a keyboard submit.
         """
+        await self._wait_for_dialog_buttons_stable()
         buttons = self._session.page.locator(
             f"{_DIALOG_SELECTOR} button, {_DIALOG_SELECTOR} [role='button']"
         )
@@ -373,7 +446,7 @@ class ConnectionActions:
             return False
         try:
             async with linkedin_element(
-                buttons.nth(count - 1), timeout=timeout
+                buttons.nth(count - 1), timeout=timeout or control_ms()
             ) as button:
                 await human_input.move_and_click(self._session.page, button)
             return True
@@ -383,13 +456,17 @@ class ConnectionActions:
             logger.debug("Primary dialog button click failed", exc_info=True)
             return False
 
-    async def _fill_dialog_textarea(self, value: str, *, timeout: int = 5000) -> bool:
+    async def _fill_dialog_textarea(
+        self, value: str, *, timeout: int | None = None
+    ) -> bool:
         """Fill the first textarea inside the open dialog (structural)."""
         locator = self._session.page.locator(_DIALOG_TEXTAREA_SELECTOR).first
         try:
             if await self._session.page.locator(_DIALOG_TEXTAREA_SELECTOR).count() == 0:
                 return False
-            async with linkedin_element(locator, timeout=timeout) as textarea:
+            async with linkedin_element(
+                locator, timeout=timeout or control_ms()
+            ) as textarea:
                 await human_input.human_type(self._session.page, textarea, value)
             return True
         except (OffLinkedInLandingError, SecurityCheckError, RateLimitError):
@@ -430,7 +507,7 @@ class ConnectionActions:
         await self._press_escape()
         try:
             await self._session.page.wait_for_selector(
-                _DIALOG_SELECTOR, state="hidden", timeout=3000
+                _DIALOG_SELECTOR, state="hidden", timeout=control_ms()
             )
         except PlaywrightTimeoutError:
             pass
@@ -516,7 +593,9 @@ class ConnectionActions:
         if not clicked:
             return False
         try:
-            await self._session.page.wait_for_selector("[role='menu']", timeout=3000)
+            await self._session.page.wait_for_selector(
+                "[role='menu']", timeout=control_ms()
+            )
             return True
         except PlaywrightTimeoutError:
             logger.debug("More menu did not appear after click")
@@ -557,7 +636,7 @@ class ConnectionActions:
             await self._navigator._navigate_to_page(SENT_INVITATIONS_URL)
             try:
                 await self._session.page.wait_for_selector(
-                    _SENT_INVITATION_ANCHOR_SELECTOR, timeout=5000
+                    _SENT_INVITATION_ANCHOR_SELECTOR, timeout=content_ms()
                 )
             except PlaywrightTimeoutError:
                 return False
@@ -621,7 +700,7 @@ class ConnectionActions:
         — no localized text matching. Owns dialog cleanup: the dialog is
         dismissed on every failure path, callers must not dismiss again.
         """
-        if not await self._dialog_is_open(timeout=5000):
+        if not await self._dialog_is_open(timeout=control_ms()):
             return False, False, None
 
         note_filled = False
@@ -644,6 +723,7 @@ class ConnectionActions:
                 # the textarea-presence recheck via _fill_dialog_textarea
                 # then fails and the caller returns connect_unavailable
                 # without sending — the same outcome as today.
+                await self._wait_for_dialog_buttons_stable()
                 buttons = self._session.page.locator(
                     f"{_DIALOG_SELECTOR} button, {_DIALOG_SELECTOR} [role='button']"
                 )
@@ -656,7 +736,7 @@ class ConnectionActions:
                         await self._session.page.wait_for_selector(
                             _DIALOG_TEXTAREA_SELECTOR,
                             state="visible",
-                            timeout=3000,
+                            timeout=control_ms(),
                         )
                     except PlaywrightTimeoutError:
                         logger.debug("Note textarea did not appear")
@@ -724,7 +804,7 @@ class ConnectionActions:
                     # this document rather than on whatever holds focus.
                     async with linkedin_element(buttons.nth(btn_count - 1)) as button:
                         await human_input.press_key(self._session.page, "Enter", button)
-                    sent = not await self._dialog_is_open(timeout=2000)
+                    sent = await self._dialog_closes()
                 except (OffLinkedInLandingError, SecurityCheckError, RateLimitError):
                     raise
                 except Exception:
@@ -751,7 +831,7 @@ class ConnectionActions:
         dialog_closed = True
         try:
             await self._session.page.wait_for_selector(
-                _DIALOG_SELECTOR, state="hidden", timeout=5000
+                _DIALOG_SELECTOR, state="hidden", timeout=control_ms()
             )
         except PlaywrightTimeoutError:
             logger.debug("Invite dialog did not close after submit")
@@ -788,7 +868,7 @@ class ConnectionActions:
         text if LinkedIn shows it while opening the note editor, then
         dismisses the dialog.
         """
-        if not await self._dialog_is_open(timeout=5000):
+        if not await self._dialog_is_open(timeout=control_ms()):
             return None
         note_limit_message = await self._get_premium_upsell_message(timeout=500)
         if note_limit_message is not None:
@@ -824,7 +904,7 @@ class ConnectionActions:
                 await self._session.page.wait_for_selector(
                     _DIALOG_TEXTAREA_SELECTOR,
                     state="visible",
-                    timeout=3000,
+                    timeout=control_ms(),
                 )
             except PlaywrightTimeoutError:
                 logger.debug("Note textarea did not appear during quota probe")
@@ -917,8 +997,12 @@ class ConnectionActions:
             verified_text = ""
             verified_state = None
             for attempt in range(2):
-                if attempt:
-                    await human_input.action_pause()
+                # Wait for the top card to show the new state (a page read,
+                # bounded by the content timeout), then a person's pause.
+                await self._wait_for_relationship_state(
+                    username, ("already_connected",)
+                )
+                await human_input.action_pause()
                 verified = await self._read_main_profile(username)
                 verified_text = verified.get("sections", {}).get("main_profile", "")
                 verified_signals = await self._read_action_signals(username)
@@ -1023,6 +1107,9 @@ class ConnectionActions:
             # recorded (observed live 2026-09-26: send_failed, then Pending).
             # Only a pending or already accepted invitation is evidence it
             # landed.
+            await self._wait_for_relationship_state(
+                username, ("pending", "already_connected")
+            )
             await human_input.action_pause()
             retry = await self._read_main_profile(username)
             retry_signals = await self._read_action_signals(username)

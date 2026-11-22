@@ -634,6 +634,12 @@ async def test_incoming_verification_resolves_classifier_at_call_time(
             new_callable=AsyncMock,
             return_value=True,
         ),
+        patch.object(
+            ConnectionActions,
+            "_wait_for_relationship_state",
+            new_callable=AsyncMock,
+            return_value=True,
+        ),
     ):
         result = await extractor.connect_with_person("target")
 

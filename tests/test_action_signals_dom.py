@@ -37,6 +37,8 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 import pytest
+
+from slow_network import apply_slow_network
 from patchright.async_api import Page, async_playwright
 
 from linkedin_mcp_server.core.exceptions import OffLinkedInLandingError
@@ -413,6 +415,7 @@ async def dom_page():
         try:
             browser = await p.chromium.launch(channel="chromium", headless=True)
             page = await browser.new_page()
+            await apply_slow_network(page)
         except Exception as exc:  # browser binary missing
             pytest.skip(f"chromium unavailable: {exc}")
         try:

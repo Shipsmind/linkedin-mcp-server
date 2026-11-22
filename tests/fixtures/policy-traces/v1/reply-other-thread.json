@@ -76,7 +76,7 @@
       "section": "message",
       "selector": "main",
       "state": "visible",
-      "timeout_ms": null
+      "timeout_ms": 30000
     }
   ],
   "result": {

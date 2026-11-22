@@ -146,6 +146,7 @@ def _apply_browser_settings(browser: BrowserManager) -> None:
     """Apply settings to an authenticated browser."""
     config = get_config()
     browser.page.set_default_timeout(config.browser.default_timeout)
+    browser.page.set_default_navigation_timeout(config.browser.navigation_timeout)
 
 
 async def _log_feed_failure_context(

@@ -181,7 +181,9 @@ AI agent? Get a quick confirmation from the user before enabling automatic updat
 
 **Timeouts:**
 
-- `--timeout MS` - Timeout for a single page operation (default: 5000)
+- `--timeout MS` - How long an in-page control (button, dialog, field) may take to appear (default: 10000)
+- `--content-timeout MS` - How long a page's content may take to be ready after navigating (default: 30000)
+- `--navigation-timeout MS` - How long a navigation may take (default: 30000)
 - `--tool-timeout SECONDS` - Timeout for a whole tool call (default: 180). Raise it for calls that read many pages, slow networks, or a cold-start browser.
 - `--login-timeout SECONDS` - How long the login browser waits for you to finish signing in (default: 1800; 0 = no limit). `--login-viewer` ends the session after 30 minutes either way.
 - `--login-inline-wait SECONDS` - How long a tool call waits for a login to finish before telling the model to retry (default: 25, max 45; 0 = return at once)
@@ -303,7 +305,7 @@ while a container is running.
 <details>
 <summary>Timeout issues</summary>
 
-- *Page operations failing* (elements not found, navigation hangs): increase the browser page-op timeout: `--timeout 10000` or `TIMEOUT=10000` (milliseconds, default 5000).
+- *Page operations failing* (elements not found, navigation hangs): increase the timeouts: `--timeout 20000` / `TIMEOUT=20000` for in-page controls (default 10000) and `--content-timeout 60000` / `CONTENT_TIMEOUT=60000` for page content (default 30000), in milliseconds.
 - *Entire tool calls timing out* (e.g. multi-section profiles, cold-start Chromium, slow containers): increase the per-tool execution timeout: `--tool-timeout 300` or `TOOL_TIMEOUT=300` (seconds, default 180).
 - *First tool call with no session*: if a locally logged-in browser has a live LinkedIn session, the server auto-imports it (see `AUTO_IMPORT_FROM_BROWSER` / `--auto-import`) instead of forcing a manual login. On macOS the keychain may prompt once for Safe Storage access. If no importable browser session exists, it falls back to opening a login window and waits up to `LOGIN_INLINE_WAIT` seconds (default 25, max 45; `--login-inline-wait`) so a quick sign-in resolves in one call. If the wait elapses, the tool returns a pending signal and the model retries in about 30 seconds. Neither the auto-import nor the inline wait applies under Docker or when the server is bound to a non-loopback HTTP host. Create the session on the host with `--login`, or use the explicit Docker `--login --login-viewer` command.
 - Users on slow connections may need higher values for either.
@@ -375,7 +377,7 @@ On startup, the MCP Bundle prepares the shared Patchright Chromium browser cache
 <details>
 <summary>Timeout issues</summary>
 
-- *Page operations failing* (elements not found, navigation hangs): increase the browser page-op timeout: `--timeout 10000` or `TIMEOUT=10000` (milliseconds, default 5000).
+- *Page operations failing* (elements not found, navigation hangs): increase the timeouts: `--timeout 20000` / `TIMEOUT=20000` for in-page controls (default 10000) and `--content-timeout 60000` / `CONTENT_TIMEOUT=60000` for page content (default 30000), in milliseconds.
 - *Entire tool calls timing out* (e.g. multi-section profiles, cold-start Chromium, slow containers): increase the per-tool execution timeout: `--tool-timeout 300` or `TOOL_TIMEOUT=300` (seconds, default 180).
 - *First tool call with no session*: if a locally logged-in browser has a live LinkedIn session, the server auto-imports it (see `AUTO_IMPORT_FROM_BROWSER` / `--auto-import`) instead of forcing a manual login. On macOS the keychain may prompt once for Safe Storage access. If no importable browser session exists, it falls back to opening a login window and waits up to `LOGIN_INLINE_WAIT` seconds (default 25, max 45; `--login-inline-wait`) so a quick sign-in resolves in one call. If the wait elapses, the tool returns a pending signal and the model retries in about 30 seconds. Neither the auto-import nor the inline wait applies under Docker or when the server is bound to a non-loopback HTTP host. Create the session on the host with `--login`, or use the explicit Docker `--login --login-viewer` command.
 - Users on slow connections may need higher values for either.
@@ -585,7 +587,9 @@ username.
 
 **Timeouts:**
 
-- `--timeout MS` - Timeout for a single page operation (default: 5000)
+- `--timeout MS` - How long an in-page control (button, dialog, field) may take to appear (default: 10000)
+- `--content-timeout MS` - How long a page's content may take to be ready after navigating (default: 30000)
+- `--navigation-timeout MS` - How long a navigation may take (default: 30000)
 - `--tool-timeout SECONDS` - Timeout for a whole tool call (default: 180). Raise it for calls that read many pages, slow networks, or a cold-start browser.
 - `--login-timeout SECONDS` - How long the login browser waits for you to finish signing in (default: 1800; 0 = no limit). `--login-viewer` ends the session after 30 minutes either way.
 - `--login-inline-wait SECONDS` - How long a tool call waits for a login to finish before telling the model to retry (default: 25, max 45; 0 = return at once)
@@ -707,7 +711,7 @@ belongs behind something that provides it.
 <details>
 <summary>Timeout issues</summary>
 
-- *Page operations failing* (elements not found, navigation hangs): increase the browser page-op timeout: `--timeout 10000` or `TIMEOUT=10000` (milliseconds, default 5000).
+- *Page operations failing* (elements not found, navigation hangs): increase the timeouts: `--timeout 20000` / `TIMEOUT=20000` for in-page controls (default 10000) and `--content-timeout 60000` / `CONTENT_TIMEOUT=60000` for page content (default 30000), in milliseconds.
 - *Entire tool calls timing out* (e.g. multi-section profiles, cold-start Chromium, slow containers): increase the per-tool execution timeout: `--tool-timeout 300` or `TOOL_TIMEOUT=300` (seconds, default 180).
 - *First tool call with no session*: if a locally logged-in browser has a live LinkedIn session, the server auto-imports it (see `AUTO_IMPORT_FROM_BROWSER` / `--auto-import`) instead of forcing a manual login. On macOS the keychain may prompt once for Safe Storage access. If no importable browser session exists, it falls back to opening a login window and waits up to `LOGIN_INLINE_WAIT` seconds (default 25, max 45; `--login-inline-wait`) so a quick sign-in resolves in one call. If the wait elapses, the tool returns a pending signal and the model retries in about 30 seconds. Neither the auto-import nor the inline wait applies under Docker or when the server is bound to a non-loopback HTTP host. Create the session on the host with `--login`, or use the explicit Docker `--login --login-viewer` command.
 - Users on slow connections may need higher values for either.
@@ -855,7 +859,9 @@ uv run -m linkedin_mcp_server
 
 **Timeouts:**
 
-- `--timeout MS` - Timeout for a single page operation (default: 5000)
+- `--timeout MS` - How long an in-page control (button, dialog, field) may take to appear (default: 10000)
+- `--content-timeout MS` - How long a page's content may take to be ready after navigating (default: 30000)
+- `--navigation-timeout MS` - How long a navigation may take (default: 30000)
 - `--tool-timeout SECONDS` - Timeout for a whole tool call (default: 180). Raise it for calls that read many pages, slow networks, or a cold-start browser.
 - `--login-timeout SECONDS` - How long the login browser waits for you to finish signing in (default: 1800; 0 = no limit). `--login-viewer` ends the session after 30 minutes either way.
 - `--login-inline-wait SECONDS` - How long a tool call waits for a login to finish before telling the model to retry (default: 25, max 45; 0 = return at once)
@@ -954,7 +960,7 @@ uv run -m linkedin_mcp_server --transport streamable-http --host 127.0.0.1 --por
 <details>
 <summary>Timeout issues</summary>
 
-- *Page operations failing* (elements not found, navigation hangs): increase the browser page-op timeout: `--timeout 10000` or `TIMEOUT=10000` (milliseconds, default 5000).
+- *Page operations failing* (elements not found, navigation hangs): increase the timeouts: `--timeout 20000` / `TIMEOUT=20000` for in-page controls (default 10000) and `--content-timeout 60000` / `CONTENT_TIMEOUT=60000` for page content (default 30000), in milliseconds.
 - *Entire tool calls timing out* (e.g. multi-section profiles, cold-start Chromium, slow containers): increase the per-tool execution timeout: `--tool-timeout 300` or `TOOL_TIMEOUT=300` (seconds, default 180).
 - *First tool call with no session*: if a locally logged-in browser has a live LinkedIn session, the server auto-imports it (see `AUTO_IMPORT_FROM_BROWSER` / `--auto-import`) instead of forcing a manual login. On macOS the keychain may prompt once for Safe Storage access. If no importable browser session exists, it falls back to opening a login window and waits up to `LOGIN_INLINE_WAIT` seconds (default 25, max 45; `--login-inline-wait`) so a quick sign-in resolves in one call. If the wait elapses, the tool returns a pending signal and the model retries in about 30 seconds. Neither the auto-import nor the inline wait applies under Docker or when the server is bound to a non-loopback HTTP host. Create the session on the host with `--login`, or use the explicit Docker `--login --login-viewer` command.
 - Users on slow connections may need higher values for either.

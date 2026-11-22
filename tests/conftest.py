@@ -14,10 +14,20 @@ from pathlib import Path
 # Python starts as well; `test_fastmcp_compatibility.py` checks it took effect.
 os.environ["FASTMCP_MCP_CAMELCASE_COMPAT"] = "false"
 # Human pacing waits are seconds long; the suite runs them at zero while
-# still producing every input event (Shipsmind fork).
-os.environ["LINKEDIN_HUMAN_PACING"] = "0"
+# still producing every input event (Shipsmind fork). Set
+# LINKEDIN_TEST_REAL_PACING=1 to run tests with the real random human pacing
+# instead (slow: seconds to minutes per test), to check the paced path itself.
+REAL_PACING = os.environ.get("LINKEDIN_TEST_REAL_PACING", "").strip() in {
+    "1",
+    "true",
+    "on",
+}
+if not REAL_PACING:
+    os.environ["LINKEDIN_HUMAN_PACING"] = "0"
 
 import pytest  # noqa: E402
+
+from slow_network import SLOW_NETWORK  # noqa: E402
 
 # The differential accounting is a plugin rather than a directory conftest so
 # that it is loaded wherever those cases run, the xdist controller included,
@@ -33,6 +43,7 @@ def reset_singletons():
     from linkedin_mcp_server.core.throttle import reset_throttle_record
     from linkedin_mcp_server.core.security_watch import reset_watch_for_testing
     from linkedin_mcp_server.core.activity_log import set_activity_sink
+    from linkedin_mcp_server.core.timeouts import set_timeouts_for_testing
     from linkedin_mcp_server.core.human_input import HumanPacer, set_pacer_for_testing
     from linkedin_mcp_server.daemon.descriptor import (
         reset_daemon_descriptor_for_testing,
@@ -64,7 +75,14 @@ def reset_singletons():
     # test tripped would stop every later test's input.
     reset_watch_for_testing()
     set_activity_sink(None)
-    set_pacer_for_testing(HumanPacer(enabled=False))
+    # Short deadlines on the instant local pages, so a case waiting for what
+    # never comes fails fast; the production deadlines under
+    # LINKEDIN_TEST_SLOW_NETWORK=1 (see tests/slow_network.py).
+    if SLOW_NETWORK:
+        set_timeouts_for_testing(content=30_000, control=10_000, navigation=30_000)
+    else:
+        set_timeouts_for_testing(content=3_000, control=1_500, navigation=10_000)
+    set_pacer_for_testing(HumanPacer(enabled=REAL_PACING))
     # Every test that builds a server records a role, and the auth gates read it
     # from process state. Left standing, one OWNER would refuse logins in every
     # test after it, in a suite where most never mention a role.

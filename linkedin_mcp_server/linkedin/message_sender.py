@@ -23,6 +23,7 @@ from linkedin_mcp_server.core.exceptions import (
 )
 import linkedin_mcp_server.linkedin.contracts as contracts
 from linkedin_mcp_server.core import human_input
+from linkedin_mcp_server.core.timeouts import content_ms, control_ms
 from linkedin_mcp_server.linkedin.identifiers import (
     messaging_thread_url,
     normalize_person_identifier,
@@ -1699,6 +1700,7 @@ class MessageSender:
             await self._page.wait_for_function(
                 _MESSAGE_COMPOSER_READY_JS,
                 arg=self._message_target_argument(target),
+                timeout=content_ms(),
             )
         except PlaywrightTimeoutError:
             return False
@@ -1802,7 +1804,10 @@ class MessageSender:
         owner: Any,
     ) -> bool:
         """Wait briefly for the exact pinned submit button to become active."""
-        deadline = time.monotonic() + _MESSAGE_SUBMIT_READY_TIMEOUT_MS / 1_000
+        deadline = (
+            time.monotonic()
+            + max(_MESSAGE_SUBMIT_READY_TIMEOUT_MS, control_ms()) / 1_000
+        )
         argument = {**self._message_target_argument(target), "message": message}
         while True:
             try:
@@ -1960,6 +1965,13 @@ class MessageSender:
         timeout. Disposal is not: a snapshot already accepted is kept when
         releasing its handle fails or runs out of time.
         """
+        # The whole send budget, not the page default: a delivered message
+        # that LinkedIn confirms after a few seconds on a slow network must not
+        # be reported unconfirmed (retry_safe=False invites a duplicate).
+        remaining = anyio.current_effective_deadline() - anyio.current_time()
+        timeout_ms = (
+            content_ms() if math.isinf(remaining) else max(1.0, remaining * 1000)
+        )
         try:
             handle = await self._page.wait_for_function(
                 _MESSAGE_CONFIRMATION_READY_JS,
@@ -1969,6 +1981,7 @@ class MessageSender:
                     "owner": owner,
                     "token": confirmation,
                 },
+                timeout=timeout_ms,
             )
         except Exception:
             logger.debug("Message send could not be confirmed", exc_info=True)
@@ -2086,12 +2099,12 @@ class MessageSender:
         await self._session.check_rate_limit()
 
         try:
-            await self._page.wait_for_selector("main")
+            await self._page.wait_for_selector("main", timeout=content_ms())
         except PlaywrightTimeoutError:
             logger.debug("Profile page did not load for %s", linkedin_username)
 
         resolution = await self._read_profile_message_target(
-            timeout_ms=_SEND_PROFILE_MESSAGE_TARGET_TIMEOUT_MS
+            timeout_ms=max(_SEND_PROFILE_MESSAGE_TARGET_TIMEOUT_MS, content_ms())
         )
         if resolution.status == "unavailable":
             return contracts.message_action_result(
@@ -2141,7 +2154,7 @@ class MessageSender:
             )
 
         try:
-            await self._page.wait_for_selector("main")
+            await self._page.wait_for_selector("main", timeout=content_ms())
         except PlaywrightTimeoutError:
             logger.debug("Compose page did not fully load for %s", linkedin_username)
         if self._page.url != expected_route:
@@ -2502,7 +2515,7 @@ class MessageSender:
         await self._navigator._navigate_to_page(target.thread_url)
         await self._session.check_rate_limit()
         try:
-            await self._page.wait_for_selector("main")
+            await self._page.wait_for_selector("main", timeout=content_ms())
         except PlaywrightTimeoutError:
             logger.debug("Thread page did not load for %s", target.thread_id)
 

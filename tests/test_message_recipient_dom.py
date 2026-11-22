@@ -12,6 +12,8 @@ import time
 from unittest.mock import AsyncMock, patch
 
 import pytest
+
+from slow_network import apply_slow_network
 from patchright.async_api import BrowserType, async_playwright
 
 from linkedin_mcp_server.linkedin.message_sender import (
@@ -53,6 +55,7 @@ async def _dom_page():
                 channel="chromium", headless=True
             )
             page = await browser.new_page()
+            await apply_slow_network(page)
         except Exception as exc:
             if os.environ.get("CI"):
                 raise

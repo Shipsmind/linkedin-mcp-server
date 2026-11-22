@@ -124,6 +124,8 @@ class EnvironmentKeys:
     LOG_LEVEL = "LOG_LEVEL"
     TRANSPORT = "TRANSPORT"
     TIMEOUT = "TIMEOUT"
+    CONTENT_TIMEOUT = "CONTENT_TIMEOUT"
+    NAVIGATION_TIMEOUT = "NAVIGATION_TIMEOUT"
     USER_AGENT = "USER_AGENT"
     HOST = "HOST"
     PORT = "PORT"
@@ -609,9 +611,37 @@ SETTINGS: tuple[Setting, ...] = (
             parse=positive_int,
             cli_empty="parse",
             metavar="MS",
-            help="Browser timeout for page operations in milliseconds (default: 5000)",
+            help=(
+                "Milliseconds an in-page control (button, dialog, field) may take "
+                "to appear (default: 10000)"
+            ),
         ),
         apply=_browser("default_timeout"),
+    ),
+    Setting(
+        env=Env(EnvironmentKeys.CONTENT_TIMEOUT, _integer),
+        cli=Option(
+            flag="--content-timeout",
+            parse=positive_int,
+            cli_empty="parse",
+            metavar="MS",
+            help=(
+                "Milliseconds a page's content may take to be ready after "
+                "navigating (default: 30000)"
+            ),
+        ),
+        apply=_browser("content_timeout"),
+    ),
+    Setting(
+        env=Env(EnvironmentKeys.NAVIGATION_TIMEOUT, _integer),
+        cli=Option(
+            flag="--navigation-timeout",
+            parse=positive_int,
+            cli_empty="parse",
+            metavar="MS",
+            help="Milliseconds a navigation may take (default: 30000)",
+        ),
+        apply=_browser("navigation_timeout"),
     ),
     Setting(
         env=Env(EnvironmentKeys.TOOL_TIMEOUT, _finite(positive=True)),

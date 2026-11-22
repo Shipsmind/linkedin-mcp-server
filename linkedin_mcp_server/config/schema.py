@@ -138,7 +138,15 @@ class BrowserConfig:
     slow_mo: int = 0  # Milliseconds between browser actions (debugging)
     viewport_width: int = 1280
     viewport_height: int = 720
-    default_timeout: int = 5000  # Milliseconds for page operations
+    # Milliseconds an in-page control (a button, a dialog, a field) may take to
+    # appear. Raised from 5000 (Shipsmind fork): a slow network or a slow
+    # machine took longer, and every wait without its own timeout gave up.
+    default_timeout: int = 10000
+    # Milliseconds a page's content may take to be ready after navigating (a
+    # profile's top card, an inbox list, a sent message's confirmation).
+    content_timeout: int = 30000
+    # Milliseconds a navigation (page.goto, a click that loads a page) may take.
+    navigation_timeout: int = 30000
     chrome_path: str | None = None  # Path to Chrome/Chromium executable
     user_data_dir: str = DEFAULT_USER_DATA_DIR  # Persistent browser profile
     # Proxy for the browser's own traffic. The server's MCP transport is not
@@ -190,6 +198,14 @@ class BrowserConfig:
         if self.default_timeout <= 0:
             raise ConfigurationError(
                 f"default_timeout must be positive, got {self.default_timeout}"
+            )
+        if self.content_timeout <= 0:
+            raise ConfigurationError(
+                f"content_timeout must be positive, got {self.content_timeout}"
+            )
+        if self.navigation_timeout <= 0:
+            raise ConfigurationError(
+                f"navigation_timeout must be positive, got {self.navigation_timeout}"
             )
         if self.viewport_width <= 0 or self.viewport_height <= 0:
             raise ConfigurationError(
