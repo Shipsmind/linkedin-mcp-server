@@ -23,6 +23,7 @@ from patchright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from linkedin_mcp_server.core.security_watch import raise_if_tripped
 from linkedin_mcp_server.core import human_input
+from linkedin_mcp_server.core.timeouts import content_ms, control_ms
 from linkedin_mcp_server.core.exceptions import LinkedInOperationError
 from linkedin_mcp_server.core.utils import (
     _JOB_CARD_SELECTOR,
@@ -286,6 +287,13 @@ APPLY_READY_JS = (
 
 # How long the apply control gets to render.
 _APPLY_READY_TIMEOUT = 10.0
+
+
+def _secs(floor: float, deadline_ms: int) -> float:
+    """A wait in seconds: the configured deadline, never less than *floor*."""
+    return max(floor, deadline_ms / 1000)
+
+
 _APPLY_POLL = 0.25
 
 # The Easy Apply dialog renders inside an open shadow root, which
@@ -713,12 +721,13 @@ class JobPageReader:
     async def _walk_easy_apply(self, job_id: str, steps: list[dict[str, Any]]) -> bool:
         """Open the dialog and read its steps into ``steps``; True when all were read."""
         page = self._session.page
-        await page.locator(f'main a[href*="/jobs/view/{job_id}/apply"]').first.click(
-            timeout=5000
+        await human_input.move_and_click(
+            page, page.locator(f'main a[href*="/jobs/view/{job_id}/apply"]').first
         )
         try:
             await page.wait_for_function(
-                EASY_APPLY_OPEN_JS, timeout=_EASY_APPLY_OPEN_TIMEOUT * 1000
+                EASY_APPLY_OPEN_JS,
+                timeout=_secs(_EASY_APPLY_OPEN_TIMEOUT, control_ms()) * 1000,
             )
         except PlaywrightTimeoutError:
             raise RuntimeError("The Easy Apply dialog did not open") from None
@@ -734,7 +743,9 @@ class JobPageReader:
                 return False
             # The only control ever clicked in the dialog. Found by its
             # attribute: a one-step form holds Submit in the same footer slot.
-            await page.locator(EASY_APPLY_NEXT_SELECTOR).click(timeout=5000)
+            await human_input.move_and_click(
+                page, page.locator(EASY_APPLY_NEXT_SELECTOR).first
+            )
             after = await self._read_easy_apply_step(step)
             if after["signature"] == step["signature"]:
                 # Refused: the same step, now carrying LinkedIn's errors.
@@ -754,7 +765,9 @@ class JobPageReader:
         that Next is still moving off for a refused one.
         """
         page = self._session.page
-        deadline = self._session.monotonic() + _EASY_APPLY_STEP_TIMEOUT
+        deadline = self._session.monotonic() + _secs(
+            _EASY_APPLY_STEP_TIMEOUT, control_ms()
+        )
         last: dict[str, Any] | None = None
         while True:
             step = await page.evaluate(EASY_APPLY_STEP_JS, _EASY_APPLY_MAX_OPTIONS)
@@ -837,10 +850,11 @@ class JobPageReader:
             await page.keyboard.press("Escape")
             with suppress(PlaywrightTimeoutError):
                 await page.locator(EASY_APPLY_DISCARD_SELECTOR).first.click(
-                    timeout=_EASY_APPLY_DISCARD_TIMEOUT * 1000
+                    timeout=_secs(_EASY_APPLY_DISCARD_TIMEOUT, control_ms()) * 1000
                 )
             await page.wait_for_function(
-                EASY_APPLY_CLOSED_JS, timeout=_EASY_APPLY_DISCARD_TIMEOUT * 1000
+                EASY_APPLY_CLOSED_JS,
+                timeout=_secs(_EASY_APPLY_DISCARD_TIMEOUT, control_ms()) * 1000,
             )
             return True
         except Exception as e:
@@ -868,7 +882,9 @@ class JobPageReader:
         }
         try:
             await page.wait_for_function(
-                APPLY_READY_JS, arg=opts, timeout=_APPLY_READY_TIMEOUT * 1000
+                APPLY_READY_JS,
+                arg=opts,
+                timeout=_secs(_APPLY_READY_TIMEOUT, content_ms()) * 1000,
             )
         except PlaywrightTimeoutError:
             logger.debug("No apply control or posting state rendered on %s", url)
@@ -1047,7 +1063,7 @@ class JobPageReader:
 
         main_found = True
         try:
-            await self._session.page.wait_for_selector("main")
+            await self._session.page.wait_for_selector("main", timeout=content_ms())
         except PlaywrightTimeoutError:
             logger.debug("No <main> element found on %s", url)
             main_found = False
@@ -1277,7 +1293,7 @@ class JobPageReader:
 
         main_found = True
         try:
-            await self._session.page.wait_for_selector("main")
+            await self._session.page.wait_for_selector("main", timeout=content_ms())
         except PlaywrightTimeoutError:
             logger.debug("No <main> element found on %s", url)
             main_found = False
@@ -1377,7 +1393,9 @@ class JobPageReader:
             raise LinkedInOperationError(
                 f"The navigation to job {job_id}'s posting ended on {page.url}"
             )
-        deadline = self._session.monotonic() + _POSTING_TITLE_TIMEOUT
+        deadline = self._session.monotonic() + _secs(
+            _POSTING_TITLE_TIMEOUT, content_ms()
+        )
         while True:
             title = await page.title()
             parsed = parse_posting_title(title)
@@ -1429,7 +1447,7 @@ class JobPageReader:
             await page.wait_for_selector(
                 _SEARCH_CARD_SELECTOR,
                 state="attached",
-                timeout=int(_SEARCH_READY_TIMEOUT * 1000),
+                timeout=int(_secs(_SEARCH_READY_TIMEOUT, content_ms()) * 1000),
             )
         except PlaywrightTimeoutError:
             logger.debug("No result card rendered on %s", url)
@@ -1458,7 +1476,9 @@ class JobPageReader:
                     "The job search results could not be scrolled to the end"
                 )
             found = await self._find_search_card(job_id)
-        deadline = self._session.monotonic() + _SEARCH_CARD_RENDER_TIMEOUT
+        deadline = self._session.monotonic() + _secs(
+            _SEARCH_CARD_RENDER_TIMEOUT, control_ms()
+        )
         while (
             found["matches"] == 1
             and not (found["dismiss"] or found["undo"])
@@ -1515,8 +1535,10 @@ class JobPageReader:
             return "no_button", cards
 
         page = self._session.page
-        await page.locator(f"button[{_DISMISS_MARK}]").click(timeout=5000)
-        deadline = self._session.monotonic() + _DISMISS_TIMEOUT
+        await human_input.move_and_click(
+            page, page.locator(f"button[{_DISMISS_MARK}]").first
+        )
+        deadline = self._session.monotonic() + _secs(_DISMISS_TIMEOUT, control_ms())
         while self._session.monotonic() < deadline:
             await self._session.delay(_SEARCH_POLL)
             found = await self._find_search_card(job_id)

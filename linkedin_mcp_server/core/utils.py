@@ -346,11 +346,11 @@ async def scroll_to_bottom(
 
 async def scroll_job_sidebar(
     page: Page,
-    settle_timeout: float = 3.0,
+    settle_timeout: float | None = None,
     poll_interval: float = 0.15,
     min_budget: float = 0.4,
     max_scrolls: int = 10,
-    deadline: float = 12.0,
+    deadline: float | None = None,
 ) -> bool:
     """Scroll the job search sidebar until it stops producing cards.
 
@@ -407,6 +407,13 @@ async def scroll_job_sidebar(
             waiting the full deadline for it would cost that again on every
             one of ``max_pages`` navigations.
     """
+    # Slow networks render the next cards later: wait for them up to the
+    # control deadline per step and the content deadline overall, never
+    # less than the measured 3 s / 12 s these replaced (Shipsmind fork).
+    if settle_timeout is None:
+        settle_timeout = max(3.0, _control_ms() / 1000)
+    if deadline is None:
+        deadline = max(12.0, _content_ms() / 1000)
     started = time.monotonic()
     if deadline <= 0:
         logger.debug("No scroll budget left for %s, skipping sidebar scroll", page.url)
@@ -420,7 +427,8 @@ async def scroll_job_sidebar(
         # away with it. A sub-millisecond deadline truncates to zero the same
         # way, which the guard above does not catch.
         await page.wait_for_selector(
-            _JOB_CARD_SELECTOR, timeout=max(1, min(5000, int(deadline * 1000)))
+            _JOB_CARD_SELECTOR,
+            timeout=max(1, min(_content_ms(), int(deadline * 1000))),
         )
     except PlaywrightTimeoutError:
         logger.debug("No job card links found, skipping sidebar scroll")
@@ -565,3 +573,17 @@ async def handle_modal_close(page: Page) -> bool:
         logger.debug("Error closing modal: %s", e)
 
     return False
+
+
+def _content_ms() -> int:
+    # Imported here so the module's line layout (which the selector-policy
+    # tests pin) is unchanged.
+    from .timeouts import content_ms
+
+    return content_ms()
+
+
+def _control_ms() -> int:
+    from .timeouts import control_ms
+
+    return control_ms()

@@ -157,11 +157,11 @@ class PageSession:
 
     async def scroll_job_sidebar(
         self,
-        settle_timeout: float = 3.0,
+        settle_timeout: float | None = None,
         poll_interval: float = 0.15,
         min_budget: float = 0.4,
         max_scrolls: int = 10,
-        deadline: float = 12.0,
+        deadline: float | None = None,
     ) -> bool:
         """Scroll the job rail through the shared utility boundary."""
         return await scroll_job_sidebar(
