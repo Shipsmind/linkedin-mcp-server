@@ -91,7 +91,7 @@
       "section": "search_results",
       "selector": "main",
       "state": "visible",
-      "timeout_ms": null
+      "timeout_ms": 30000
     },
     {
       "call": "search_jobs",
@@ -116,7 +116,7 @@
       "moved": false,
       "poll_interval": 0.15,
       "section": "search_results",
-      "settle_timeout": 3.0
+      "settle_timeout": null
     },
     {
       "call": "search_jobs",

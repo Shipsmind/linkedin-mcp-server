@@ -1169,7 +1169,7 @@ class TestExtractSearchPage:
             scrolled.append(kwargs.get("deadline"))
             return False
 
-        async def wait_for_main(selector):
+        async def wait_for_main(selector, **_kwargs):
             clock.now += 1.0
 
         mock_page.wait_for_selector = AsyncMock(side_effect=wait_for_main)

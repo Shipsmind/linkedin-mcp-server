@@ -97,7 +97,7 @@
       "section": "saved_jobs",
       "selector": "main",
       "state": "visible",
-      "timeout_ms": null
+      "timeout_ms": 30000
     },
     {
       "call": "get_saved_jobs",
@@ -253,7 +253,7 @@
       "section": "saved_jobs",
       "selector": "main",
       "state": "visible",
-      "timeout_ms": null
+      "timeout_ms": 30000
     },
     {
       "call": "get_saved_jobs",

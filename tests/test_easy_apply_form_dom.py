@@ -22,6 +22,8 @@ import json
 
 import anyio
 import pytest
+
+from slow_network import apply_slow_network
 from patchright.async_api import async_playwright
 
 from linkedin_mcp_server.linkedin import job_pages
@@ -215,6 +217,7 @@ async def dom_page():
                 channel="chromium", headless=True
             )
             page = await browser.new_page()
+            await apply_slow_network(page)
         except Exception as exc:  # pragma: no cover - environment dependent
             pytest.skip(f"chromium unavailable: {exc}")
         await page.route(
