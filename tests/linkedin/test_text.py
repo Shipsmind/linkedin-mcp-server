@@ -104,6 +104,7 @@ class TestDetailCaptureText:
                         const main = document.querySelector('main');
                         if (!main) return false;
                         const text = main.innerText.trimStart();
+                        if (!text.length) return false;
                         return !text.startsWith('Load more')
                             && !text.startsWith('More profiles for you')
                             && !text.startsWith('Explore premium profiles');

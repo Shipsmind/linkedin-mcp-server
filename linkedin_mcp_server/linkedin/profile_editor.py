@@ -16,8 +16,10 @@ import logging
 import re
 
 from patchright.async_api import Locator, Page
+from patchright.async_api import TimeoutError as PlaywrightTimeoutError
 
 import linkedin_mcp_server.linkedin.profile_selectors as sel
+from linkedin_mcp_server.core.timeouts import content_ms, control_ms
 from linkedin_mcp_server.linkedin.navigation import PageNavigator
 from linkedin_mcp_server.core import human_input
 from linkedin_mcp_server.linkedin.session import PageSession
@@ -41,10 +43,19 @@ _SAVE_TIMEOUT_MS = 15_000
 _FIELD_TIMEOUT_MS = 10_000
 _SETTLE_MS = 500
 _SETTLE_READS = 8
-_EMPTY_SETTLE_MS = 4_000
-_VIEW_SETTLE_MS = 2_500
 _MAX_VIEW_SCROLLS = 8
-_SCROLL_SETTLE_MS = 1_500
+# Links whose href matches a pattern, counted; read before a scroll so the
+# wait after it can tell whether the next batch arrived.
+_LINK_COUNT_JS = r"""(pattern) => {
+    const re = new RegExp(pattern);
+    return Array.from(document.querySelectorAll('a[href]'))
+        .filter(a => re.test(a.getAttribute('href') || '')).length;
+}"""
+_LINK_COUNT_GREW_JS = r"""({ pattern, count }) => {
+    const re = new RegExp(pattern);
+    return Array.from(document.querySelectorAll('a[href]'))
+        .filter(a => re.test(a.getAttribute('href') || '')).length > count;
+}"""
 _OPTION_TIMEOUT_MS = 6_000
 _DATE_RANGE = re.compile(r"\b(19|20)\d{2}\b")
 
@@ -176,9 +187,9 @@ class ProfileEditor:
                 value = again
             # Two empty reads agree before a slow editor has filled in, so an
             # empty value is accepted only once it has stayed empty for
-            # _EMPTY_SETTLE_MS; a real value usually arrives well before that.
+            # the control deadline; a real value usually arrives well before that.
             waited = 0
-            while not value.strip() and waited < _EMPTY_SETTLE_MS:
+            while not value.strip() and waited < control_ms():
                 await self._page.wait_for_timeout(_SETTLE_MS)
                 waited += _SETTLE_MS
                 value = await loc.inner_text()
@@ -334,6 +345,7 @@ class ProfileEditor:
     async def list_experiences(self) -> list[ExperienceSummary]:
         vanity = await self._vanity_name()
         await self._goto(sel.experience_list_url(vanity))
+        await self._session.wait_page_ready("details")
         await self._session.scroll_body(pause_time=0.8, max_scrolls=8)
         items = await self._page.evaluate(
             sel.LIST_ITEMS_JS, sel.EXPERIENCE_EDIT_HREF.pattern
@@ -376,6 +388,7 @@ class ProfileEditor:
         """
         vanity = await self._vanity_name()
         await self._goto(sel.skills_list_url(vanity))
+        await self._session.wait_page_ready("details")
         await self._session.scroll_body(pause_time=0.8, max_scrolls=10)
         found: dict[str, str] = {}
 
@@ -395,12 +408,23 @@ class ProfileEditor:
                 # The list scrolls inside its own container, not the window:
                 # bringing the last loaded item into view scrolls whichever
                 # container holds it, which loads the next batch.
+                count = await self._page.evaluate(
+                    _LINK_COUNT_JS, sel.SKILL_EDIT_HREF.pattern
+                )
                 await self._page.evaluate(
                     sel.SCROLL_LAST_ITEM_JS, sel.SKILL_EDIT_HREF.pattern
                 )
-                # The next batch loads after the scroll (a page wait, not
-                # pacing), then a person's random pause.
-                await self._page.wait_for_timeout(_SCROLL_SETTLE_MS)
+                # Wait for the next batch to arrive (an event wait up to the
+                # control deadline); none means the view has ended. Then a
+                # person's random pause.
+                try:
+                    await self._page.wait_for_function(
+                        _LINK_COUNT_GREW_JS,
+                        arg={"pattern": sel.SKILL_EDIT_HREF.pattern, "count": count},
+                        timeout=control_ms(),
+                    )
+                except PlaywrightTimeoutError:
+                    logger.debug("No more skills loaded after the scroll")
                 await self._session.action_pause()
             else:
                 # Every scroll up to the cap still brought new skills, so the
@@ -419,9 +443,17 @@ class ProfileEditor:
             if await button.get_attribute("aria-current") == "true":
                 continue
             await human_input.move_and_click(self._page, button)
-            # The view loads after the click (a page wait, not pacing), then a
-            # person's random pause before the next action.
-            await self._page.wait_for_timeout(_VIEW_SETTLE_MS)
+            # Wait for the clicked view to become the current one (an event
+            # wait), then a person's random pause before reading it.
+            try:
+                handle = await button.element_handle()
+                await self._page.wait_for_function(
+                    "(el) => el.getAttribute('aria-current') === 'true'",
+                    arg=handle,
+                    timeout=content_ms(),
+                )
+            except Exception:  # noqa: BLE001 - read what rendered, as before
+                logger.debug("Skills view did not report itself current")
             await self._session.action_pause()
             await collect()
         return [

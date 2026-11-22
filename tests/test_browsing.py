@@ -153,6 +153,10 @@ class FakeSession:
         self.pauses.append("page_load")
         return 0.0
 
+    async def wait_page_ready(self, kind: str = "main", timeout: Any = None) -> bool:
+        self.pauses.append(f"ready:{kind}")
+        return True
+
 
 class FakeNavigator:
     def __init__(self, page: FakePage):

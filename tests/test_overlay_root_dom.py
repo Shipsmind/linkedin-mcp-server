@@ -17,6 +17,8 @@ import asyncio
 from typing import Any
 
 import pytest
+
+from slow_network import SLOW_NETWORK, apply_slow_network
 from patchright.async_api import TimeoutError as PlaywrightTimeoutError
 from patchright.async_api import async_playwright
 
@@ -63,9 +65,10 @@ async def dom_page():
             browser = await p.chromium.launch(channel="chromium", headless=True)
             context = await browser.new_context()
             page = await context.new_page()
+            await apply_slow_network(page)
         except Exception as exc:  # browser binary missing
             pytest.skip(f"chromium unavailable: {exc}")
-        page.set_default_timeout(1500)
+        page.set_default_timeout(10_000 if SLOW_NETWORK else 1500)
         try:
             yield page
         finally:

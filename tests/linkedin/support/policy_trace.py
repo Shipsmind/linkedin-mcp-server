@@ -748,6 +748,9 @@ def semantic_program_id(program: str) -> str:
         ("premium/", "premium_dialog_text"),
         ('main a[href*="/in/"]', "sidebar_expanded_profiles"),
     )
+    ready = re.search(r"/\* page-ready:([a-z_]+) \*/", compact)
+    if ready:
+        return f"page_ready_{ready.group(1)}"
     for marker, operation in checks:
         if marker in compact:
             return operation

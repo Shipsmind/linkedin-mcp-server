@@ -101,3 +101,56 @@ async def test_the_send_confirmation_waits_for_the_rest_of_the_send_budget():
         )
     timeout = page.wait_for_function.await_args.kwargs["timeout"]
     assert 18_000 < timeout <= 20_000  # the budget, not the 5 s page default
+
+
+# --- wait_page_ready on a real page -------------------------------------------
+
+from patchright.async_api import async_playwright  # noqa: E402
+
+from linkedin_mcp_server.linkedin.page_ready import READY_JS  # noqa: E402
+from linkedin_mcp_server.linkedin.session import PageSession  # noqa: E402
+from slow_network import apply_slow_network  # noqa: E402
+
+LATE_TOP_CARD = """<!DOCTYPE html><html><body><main id="m"></main><script>
+setTimeout(() => {
+  document.getElementById('m').innerHTML =
+    '<section><h1>Ada Lovelace</h1><button>Message</button></section>';
+}, 700);
+</script></body></html>"""
+
+
+@pytest.fixture
+async def real_page():
+    async with async_playwright() as pw:
+        try:
+            browser = await pw.chromium.launch(channel="chromium", headless=True)
+            page = await browser.new_page()
+        except Exception as exc:  # browser binary missing
+            pytest.skip(f"chromium unavailable: {exc}")
+        await apply_slow_network(page)
+        try:
+            yield page
+        finally:
+            await browser.close()
+
+
+def test_every_ready_kind_is_a_marked_function():
+    for kind, script in READY_JS.items():
+        assert script.startswith("() => {") and f"/* page-ready:{kind} */" in script
+
+
+async def test_the_profile_wait_returns_once_the_top_card_renders(real_page):
+    await real_page.set_content(LATE_TOP_CARD)
+    started = time.monotonic()
+    assert await PageSession(real_page).wait_page_ready("profile", timeout=10_000)
+    assert time.monotonic() - started >= 0.5  # waited for the late render
+    assert await real_page.evaluate("document.querySelector('main h1').innerText")
+
+
+async def test_an_empty_page_is_not_ready_and_the_wait_ends_at_its_deadline(real_page):
+    await real_page.set_content(
+        "<!DOCTYPE html><html><body><main></main></body></html>"
+    )
+    started = time.monotonic()
+    assert not await PageSession(real_page).wait_page_ready("main", timeout=600)
+    assert time.monotonic() - started < 5

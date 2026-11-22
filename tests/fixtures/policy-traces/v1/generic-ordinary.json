@@ -65,6 +65,15 @@
       "section": "section"
     },
     {
+      "arg": null,
+      "call": "extract_page",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "section": "section",
+      "timeout_ms": 30000
+    },
+    {
       "call": "extract_page",
       "kind": "boundary.rate_limit",
       "section": "section"
@@ -76,7 +85,7 @@
       "section": "section",
       "selector": "main",
       "state": "visible",
-      "timeout_ms": null
+      "timeout_ms": 30000
     },
     {
       "call": "extract_page",

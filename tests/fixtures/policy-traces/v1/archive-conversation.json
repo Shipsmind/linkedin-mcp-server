@@ -68,6 +68,14 @@
       "kind": "listener.remove"
     },
     {
+      "arg": null,
+      "call": "archive_conversation",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "timeout_ms": 30000
+    },
+    {
       "call": "archive_conversation",
       "kind": "boundary.rate_limit"
     },
@@ -75,12 +83,6 @@
       "call": "archive_conversation",
       "dismissed": false,
       "kind": "boundary.modal"
-    },
-    {
-      "call": "archive_conversation",
-      "kind": "sleep",
-      "reason": "sleep",
-      "seconds": 0.25
     },
     {
       "call": "archive_conversation",
@@ -223,6 +225,14 @@
       "kind": "listener.remove"
     },
     {
+      "arg": null,
+      "call": "archive_conversation",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "timeout_ms": 30000
+    },
+    {
       "call": "archive_conversation",
       "kind": "boundary.rate_limit"
     },
@@ -230,12 +240,6 @@
       "call": "archive_conversation",
       "dismissed": false,
       "kind": "boundary.modal"
-    },
-    {
-      "call": "archive_conversation",
-      "kind": "sleep",
-      "reason": "sleep",
-      "seconds": 0.25
     },
     {
       "call": "archive_conversation",

@@ -64,6 +64,15 @@
       "section": "search_results"
     },
     {
+      "arg": null,
+      "call": "search_jobs",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "section": "search_results",
+      "timeout_ms": 30000
+    },
+    {
       "call": "search_jobs",
       "kind": "boundary.rate_limit",
       "section": "search_results"
@@ -224,6 +233,15 @@
       "event": "framenavigated",
       "kind": "listener.remove",
       "section": "search_results"
+    },
+    {
+      "arg": null,
+      "call": "search_jobs",
+      "kind": "wait_for_function",
+      "operation": "page_ready_main",
+      "program_digest": "285d578d1112",
+      "section": "search_results",
+      "timeout_ms": 30000
     },
     {
       "call": "search_jobs",

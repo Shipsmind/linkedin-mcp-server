@@ -67,6 +67,38 @@ class PageSession:
 
         return await human_input.read_pause(text_len)
 
+    async def wait_page_ready(
+        self, kind: str = "main", timeout: float | None = None
+    ) -> bool:
+        """Wait for the page's content of *kind* to render (see page_ready.py).
+
+        Event-driven: a predicate in the page, up to *timeout* ms (default the
+        content deadline), so it ends as soon as the content is there. Answers
+        whether it got ready; on a timeout the caller reads what rendered, as
+        before. Stops at once if the security tripwire fired.
+        """
+        from linkedin_mcp_server.core.activity_log import emit
+        from linkedin_mcp_server.core.security_watch import raise_if_tripped
+        from linkedin_mcp_server.core.timeouts import content_ms
+        from linkedin_mcp_server.linkedin.page_ready import READY_JS
+
+        raise_if_tripped()
+        script = READY_JS[kind]
+        started = time.monotonic()
+        try:
+            await self.page.wait_for_function(script, timeout=timeout or content_ms())
+            ready = True
+        except Exception:  # noqa: BLE001 - a timeout, or a page mid-navigation
+            ready = False
+        raise_if_tripped()
+        emit(
+            "page_ready",
+            kind=kind,
+            ready=ready,
+            waited_s=round(time.monotonic() - started, 3),
+        )
+        return ready
+
     async def run_on_linkedin(self, script: str, arg: Any = _NO_ARGUMENT) -> Any:
         """Run a page *script* only in a LinkedIn document, and answer its result.
 

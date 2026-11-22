@@ -17,6 +17,8 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
+
+from slow_network import apply_slow_network
 from patchright.async_api import Page, Route, async_playwright
 
 from linkedin_mcp_server.linkedin.navigation import PageNavigator
@@ -252,6 +254,7 @@ async def page() -> AsyncIterator[Page]:
         context = await browser.new_context()
         await context.route("**/*", _route)
         p = await context.new_page()
+        await apply_slow_network(p)
         yield p
         await browser.close()
 

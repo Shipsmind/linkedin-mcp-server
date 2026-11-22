@@ -12,6 +12,7 @@ from patchright.async_api import (
 )
 
 from .destination import is_linkedin_landing, linkedin_element
+from .timeouts import control_ms
 from .security_watch import (
     TRIPWIRE,
     is_security_check_url,
@@ -330,12 +331,17 @@ async def resolve_remember_me_prompt(page: Page, *, timeout: int | None = None) 
         except PlaywrightTimeoutError:
             logger.debug("Remember-me prompt click did not finish loading in time")
 
-        if deadline is None or loop is None:
-            await asyncio.sleep(1)
-        else:
-            remaining = deadline - loop.time()
-            if remaining > 0:
-                await asyncio.sleep(min(1, remaining))
+        # Wait for the picker to go (the account was chosen), not a fixed second.
+        picker_timeout = _operation_timeout(control_ms())
+        if picker_timeout:
+            try:
+                await page.wait_for_selector(
+                    _REMEMBER_ME_CONTAINER_SELECTOR,
+                    state="detached",
+                    timeout=picker_timeout,
+                )
+            except PlaywrightTimeoutError:
+                logger.debug("Remember-me picker still showing after the click")
         return True
     except PlaywrightTimeoutError:
         logger.debug("Remember-me prompt was present but not clickable in time")

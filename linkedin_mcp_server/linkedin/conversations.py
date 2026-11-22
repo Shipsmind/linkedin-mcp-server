@@ -15,6 +15,7 @@ import anyio
 import anyio.lowlevel
 from patchright.async_api import TimeoutError as PlaywrightTimeoutError
 
+from linkedin_mcp_server.core.timeouts import content_ms, control_ms
 from linkedin_mcp_server.core.exceptions import (
     InvalidReferenceError,
     LinkedInOperationError,
@@ -449,6 +450,15 @@ _THREAD_POLL = 0.25
 # Twelve route reads 100 ms apart after a row click: the same 1.2 s budget the
 # in-page row loop had before rows were opened from Python.
 _ROW_ROUTE_POLL = 0.1
+
+
+def _row_route_polls() -> int:
+    """Route reads after a row click: 100 ms apart for the control deadline
+    (at least the twelve the in-page loop had), so a slow network's route
+    change is still seen."""
+    return max(12, int(control_ms() / 1000 / _ROW_ROUTE_POLL))
+
+
 # Wheel bursts one region-scroll attempt may take to reach the edge.
 _REGION_MAX_BURSTS = 12
 
@@ -548,6 +558,9 @@ class _ThreadFolderListener:
         self._thread_key = thread_key
         self._pending: list[asyncio.Task[None]] = []
         self.categories: list[str] | None = None
+        # Set the moment the conversations payload naming this thread is read,
+        # so the reader waits on the response, not on a poll.
+        self.arrived = asyncio.Event()
 
     def install(self) -> None:
         self._page.on("response", self._handle_response)
@@ -573,6 +586,7 @@ class _ThreadFolderListener:
             categories = thread_categories(payload, self._thread_key)
             if categories is not None:
                 self.categories = categories
+                self.arrived.set()
 
         self._pending.append(asyncio.create_task(_read()))
 
@@ -705,7 +719,7 @@ class ConversationReader:
         self,
         *,
         minimum_length: int = 100,
-        timeout: int = 10000,
+        timeout: int | None = None,
         log_context: str,
     ) -> None:
         """Wait for main content to populate enough text to read."""
@@ -717,7 +731,7 @@ class ConversationReader:
                     return main.innerText.length > minimumLength;
                 }""",
                 arg={"minimumLength": minimum_length},
-                timeout=timeout,
+                timeout=timeout or content_ms(),
             )
         except PlaywrightTimeoutError:
             logger.debug("%s content did not appear", log_context)
@@ -835,7 +849,7 @@ class ConversationReader:
             await self._session.page.wait_for_selector(
                 "main li label[aria-label]",
                 state="attached",
-                timeout=10000,
+                timeout=content_ms(),
             )
         except PlaywrightTimeoutError:
             logger.debug(
@@ -934,7 +948,7 @@ class ConversationReader:
             before = await self._session.run_on_linkedin(_THREAD_ID_JS)
             await human_input.move_and_click(page, target)
             after = None
-            for _ in range(12):
+            for _ in range(_row_route_polls()):
                 # Polling the page for the SPA route, not human pacing.
                 await self._session.delay(_ROW_ROUTE_POLL)
                 now = await self._session.run_on_linkedin(_THREAD_ID_JS)
@@ -1041,7 +1055,7 @@ class ConversationReader:
         await self._session.check_rate_limit()
 
         try:
-            await self._session.page.wait_for_selector("main")
+            await self._session.page.wait_for_selector("main", timeout=content_ms())
         except PlaywrightTimeoutError:
             logger.debug("Profile page did not load for %s", linkedin_username)
 
@@ -1328,11 +1342,15 @@ class ConversationReader:
                     f"ended on {page.url}."
                 )
             await self._session.dismiss_modal()
-            deadline = self._session.monotonic() + _THREAD_READY_TIMEOUT
-            while listener.categories is None:
-                if self._session.monotonic() >= deadline:
-                    break
-                await self._session.delay(_THREAD_POLL)
+            # The thread's folder comes in a response: wait for it (an event),
+            # up to the content deadline.
+            if listener.categories is None:
+                try:
+                    await asyncio.wait_for(
+                        listener.arrived.wait(), timeout=content_ms() / 1000
+                    )
+                except asyncio.TimeoutError:
+                    logger.debug("No folder answer for thread %s", thread_key)
             return listener.categories
         finally:
             listener.remove()
@@ -1358,7 +1376,7 @@ class ConversationReader:
             )
 
         options: dict[str, Any] = {"triggers": 0, "name": None}
-        deadline = self._session.monotonic() + _THREAD_READY_TIMEOUT
+        deadline = self._session.monotonic() + content_ms() / 1000
         while True:
             found = await page.evaluate(
                 THREAD_OPTIONS_JS,
@@ -1394,7 +1412,7 @@ class ConversationReader:
             },
         )
         await page.locator(f"main button[{_THREAD_OPTIONS_MARK}]").click(timeout=5000)
-        deadline = self._session.monotonic() + _THREAD_MENU_TIMEOUT
+        deadline = self._session.monotonic() + control_ms() / 1000
         while True:
             menu = await page.evaluate(
                 THREAD_MENU_ITEMS_JS,
